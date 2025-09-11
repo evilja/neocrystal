@@ -257,6 +257,9 @@ fn main() {
             Ok(val) => {
                 println!("{:?}", val);
                 found_val = (true, val);
+                if val <= Instant::now() {
+                    found_val = (false, Instant::now());
+                }
             },
             Err(_) => (),
         }
@@ -308,7 +311,10 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
     loop {
         if let Ok((command, value)) = receiver.recv_timeout(Duration::from_millis(100)) {
             match command {
-                "pause" => sink.pause(),
+                "pause" => {
+                    sink.pause();
+                    transmitter.send(Instant::now())?; // send a time in the past to indicate paused state
+                },
                 "resume" => sink.play(),
                 "stop" => {
                     sink.stop();
