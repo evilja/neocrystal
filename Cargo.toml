@@ -1,0 +1,10 @@
+[package]
+name = "crystal_plus"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glob = "0.3.3"
+mp3-duration = "0.1.10"
+pancurses = { version = "0.17.0", features = ["win32"] }
+rodio = "0.21.1"
