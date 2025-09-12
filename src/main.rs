@@ -1,7 +1,6 @@
 
 extern crate pancurses;
 extern crate glob;
-use core::time;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::fs::File;
@@ -12,9 +11,7 @@ use std::path::Path;
 use mp3_duration;
 use pancurses::{initscr, Input};
 use glob::glob;
-use discord_presence::{Client, Event};
-use std::sync::Arc;
-use std::sync::Mutex;
+use discord_presence::{Client};
 #[derive(Clone)]
 struct Songs {
     songs: Vec<String>,
