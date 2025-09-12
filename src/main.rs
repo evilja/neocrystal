@@ -84,7 +84,7 @@ fn rpc_handler(comm_recv: Receiver<(String, &'static str)>) {
 }
 
 fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'static str>) -> bool {
-    let version = "v0.1rust".to_string();
+    let version = "v1.0".to_string();
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) = mpsc::channel();
     let mut page = 1;
     let mut fun_index = 0;
@@ -145,7 +145,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
         window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
         window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
         window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
-        window.mvaddstr(maxy-3, 2, "Version  Loop    Crystalserver            Vol ");
+        window.mvaddstr(maxy-3, 2, "Version  Loop       Crystal      Rpc      Vol ");
         window.mvaddstr(maxy-2, 2, format!("{}", version));
         window.mvchgat(maxy-2, 2, format!("{}", version).len() as i32, pancurses::A_BOLD, 0);
         window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
@@ -260,6 +260,8 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                     songs.stop();
                     tx.send(("pause", String::new())).unwrap();
                 },
+                Input::Character('b') => { todo!() },
+                Input::Character('j') => { todo!() }, // SEARCH MODE TODO
 
 
                 _ => (),
