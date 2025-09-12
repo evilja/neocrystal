@@ -1,6 +1,7 @@
-//use crystal_plus::discord::{init_discord, shutdown_discord, update_discord};
+
 extern crate pancurses;
 extern crate glob;
+use core::time;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::fs::File;
@@ -9,10 +10,12 @@ use rodio::*;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::path::Path;
 use mp3_duration;
-use pancurses::{endwin, initscr, Input, Window};
+use pancurses::{initscr, Input};
 use glob::glob;
-// filesystem to reach mp3s
-
+use discord_presence::{Client, Event};
+use std::sync::Arc;
+use std::sync::Mutex;
+#[derive(Clone)]
 struct Songs {
     songs: Vec<String>,
     current_song: usize,
@@ -21,10 +24,10 @@ struct Songs {
 }
 
 impl Songs {
-    fn all_songs(&self) -> Vec<String> {
+    fn _all_songs(&self) -> Vec<String> {
         return self.songs.clone();
     }
-    fn current_index(&self) -> usize {
+    fn _current_index(&self) -> usize {
         return self.current_song.clone();
     }
     fn current_name(&self) -> String {
@@ -44,14 +47,58 @@ impl Songs {
     }
 }
 
+fn rpc_handler(comm_recv: Receiver<(String, &'static str)>) {
+    let mut drpc = Client::new(1003981361079668829);
+    drpc.on_ready(|_ctx| {
+        println!("READY!");
+    })
+    .persist();
+
+    drpc.on_error(|ctx| {
+        eprintln!("An error occured, {:?}", ctx.event);
+    })
+    .persist();
+    drpc.start();
+    loop {
+        match comm_recv.recv() {
+            Ok((x, y)) => {
+                if x == "stop" {
+                    break;
+                }
+                loop {
+                    match drpc.set_activity(|act| {
+                    act.state(y)
+                        .details(x.clone().replace("music/", "").replace("music\\", "").replace(".mp3", ""))
+                        .assets(|ass| {
+                            ass.small_image("github")
+                                .small_text("github.com/evilja/neo-crystal-plus")
+                                .large_image("default")
+                                .large_text("Crystal+ by Myisha")
+                        })
+                    }) {
+                        Ok(_) => break,
+                        Err(_) => thread::sleep(Duration::from_secs(1)),
+                    }
+                }
+            }
+            Err(_) => thread::sleep(Duration::from_secs(1)),
+        }
+    }
+}
+
 fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'static str>) -> bool {
     let version = "v0.1rust".to_string();
+    let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) = mpsc::channel();
     let mut page = 1;
     let mut fun_index = 0;
     let mut window = initscr();
     let mut specialinteraction = false;
     let mut local_volume_counter = 0.5;
     let mut isloop = false;
+    let mut reinit_rpc = true;
+    let _rpc_thread = thread::spawn(move || {
+        rpc_handler(rpcrx);
+    });
     let mut songs = Songs{
         songs: glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>(),
         current_song: 0,
@@ -101,7 +148,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
         window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
         window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
         window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
-        window.mvaddstr(maxy-3, 2, "Version  Loop    Crystalserver           Vol ");
+        window.mvaddstr(maxy-3, 2, "Version  Loop    Crystalserver            Vol ");
         window.mvaddstr(maxy-2, 2, format!("{}", version));
         window.mvchgat(maxy-2, 2, format!("{}", version).len() as i32, pancurses::A_BOLD, 0);
         window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
@@ -110,15 +157,22 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
         window.mvchgat(maxy-2, maxx/2-4, " offline".len() as i32, pancurses::A_BOLD, 2);
         window.mvaddstr(
             maxy-2,
-            maxx - ((format!("{}  ", local_volume_counter)).len() as i32 + 2),
-            format!("{}  ", local_volume_counter)
+            maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2),
+            format!("{} ", local_volume_counter)
         );
-        window.mvchgat(maxy-2, maxx - ((format!("{}  ", local_volume_counter)).len() as i32 + 2), (format!("{}  ", local_volume_counter)).len() as i32, pancurses::A_BOLD, 0);
+        window.mvchgat(maxy-2, maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2), (format!("{}  ", local_volume_counter)).len() as i32, pancurses::A_BOLD, 0);
+        if reinit_rpc {
+            window.mvaddstr(maxy-2, maxx - 15, "init");
+            window.mvchgat(maxy-2, maxx - 15, "init".len() as i32, pancurses::A_BOLD, 2);
+        } else {
+            window.mvaddstr(maxy-2, maxx - 15, "done");
+            window.mvchgat(maxy-2, maxx - 15, "done".len() as i32, pancurses::A_BOLD, 1);
+        }
         window.refresh();
 
         // DRAW SONGS
         let key_opt = match comm_rx.try_recv() {
-            Ok(key) => Some(Input::KeyF13),
+            Ok(_key) => Some(Input::KeyF13),
             Err(_) => window.getch(),
         };
         if let Some(key) = key_opt {
@@ -129,6 +183,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                         songs.set_by_next();
                     }
                     tx.send(("play_track", songs.current_name())).unwrap();
+                    reinit_rpc = true;
                 },
                 Input::Character('q') => break,
                 Input::KeyDown | Input::Character('j') => {
@@ -192,6 +247,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                 Input::Character('p') => {
                     songs.set_by_pindex(fun_index, page);
                     tx.send(("play_track", songs.current_name())).unwrap();
+                    reinit_rpc = true;
                 },
                 Input::Character('o') => {
                     if specialinteraction {
@@ -215,24 +271,25 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
         } else {
             thread::sleep(Duration::from_millis(100));
         }
-
-
-
+        if reinit_rpc {
+            rpctx.send((songs.current_name().to_string(), "Demo")).unwrap();
+            reinit_rpc = false;
+        }
 
     }
+    rpctx.send(("stop".to_string(), "stop")).unwrap();
     true
 }
 
 fn main() {
-    println!("{:?}", glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>) = mpsc::channel();
     let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>) = mpsc::channel();
     let (comm_tx, comm_rx): (Sender<&'static str>, Receiver<&'static str>) = mpsc::channel();
     let (sigkill, issigkill): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
-            Ok(rpc_details) => {
-                println!("RPC Details: {}, State: {}", rpc_details.details, rpc_details.state);
+            Ok(_) => {
+                ()
             },
             Err(e) => {
                 eprintln!("Error in audio playback: {}", e);
@@ -242,7 +299,7 @@ fn main() {
     tx.send(("volume_df", String::new())).unwrap();
     //tx.send(("play_track", "Psychogram.mp3".to_string())).unwrap(); // to test comm
     let mut found_val = (false, Instant::now());
-    let mut ret_value: Result<Instant, TryRecvError> = Err(TryRecvError::Empty);
+    let ret_value: Result<Instant, TryRecvError> = Err(TryRecvError::Empty);
     let thrloop: thread::JoinHandle<()> = thread::spawn(move || loop {
         // i need a kill thing for this thread, because it doesn't have a natural break
         // because it is supposed to live as long as the program runs
@@ -279,7 +336,6 @@ fn main() {
                 found_val = (false, Instant::now());
             }
         }
-        println!("{:?} seconds remaining", (found_val.1 - Instant::now()).as_secs());
         thread::sleep(Duration::from_millis(100));
     });
 
@@ -289,22 +345,8 @@ fn main() {
     thrloop.join().unwrap();
 
 }
-struct RpcDetails {
-    details: String,
-    state: String,
-}
 
-impl RpcDetails {
-    fn new(details: String, state: String) -> Self {
-        RpcDetails {
-            details,
-            state,
-        }
-    }
-
-}
-
-fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<RpcDetails, Box<dyn std::error::Error>> {
+fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<String, Box<dyn std::error::Error>> {
     let stream_handle: OutputStream = rodio::OutputStreamBuilder::open_default_stream()
         .expect("open default audio stream");
     let sink = rodio::Sink::connect_new(&stream_handle.mixer());
@@ -376,5 +418,5 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
             }
         }
     }
-    Ok(RpcDetails::new("Playing audio".into(), "Playing".into()))
+    Ok("Stopped".to_string())
 }
