@@ -83,6 +83,9 @@ fn rpc_handler(comm_recv: Receiver<(String, &'static str)>) {
     }
 }
 
+#[inline]
+fn calc() {}
+
 fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'static str>) -> bool {
     let version = "v1.0".to_string();
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) = mpsc::channel();
@@ -203,7 +206,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                             }
                         }
                     } else {
-                        if fun_index < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
+                        if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
                             fun_index += 1;
                         } else if (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
                             page += 1;
@@ -231,13 +234,11 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                             }
                         }
                     } else {
-                        if fun_index > 0 && (fun_index + ((page-1) * songs.typical_page_size)) > 0 {
+                        if fun_index > 0 {
                             fun_index -= 1;
-                        } else if (fun_index + ((page-1) * songs.typical_page_size)) > 0 {
-                            if page > 1 {
-                                page -= 1;
-                                fun_index = songs.typical_page_size;
-                            }
+                        } else if page > 1 {
+                            page -= 1;
+                            fun_index = songs.typical_page_size -1;
                         }
                     }
                 },
@@ -271,7 +272,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
             thread::sleep(Duration::from_millis(100));
         }
         if reinit_rpc {
-            rpctx.send((songs.current_name().to_string(), "Demo")).unwrap();
+            rpctx.send((songs.current_name().to_string(), "v1.0")).unwrap();
             reinit_rpc = false;
         }
 
