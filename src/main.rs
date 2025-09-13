@@ -269,7 +269,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
             }
             
         } else {
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(Duration::from_millis(50));
         }
         if reinit_rpc {
             rpctx.send((songs.current_name().to_string(), "v1.0")).unwrap();
