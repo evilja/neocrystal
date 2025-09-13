@@ -18,25 +18,68 @@ struct Songs {
     current_song: usize,
     current_name: String,
     typical_page_size: usize,
+    blacklist: Vec<usize>, 
+    start: usize,
+    end: usize,
 }
 
 impl Songs {
+    fn constructor(songs: Vec<String>) -> Self {
+        Self {
+            songs: songs.clone(),
+            current_song: 0,
+            current_name: "Nothing".to_string(),
+            typical_page_size: 14,
+            blacklist: vec![],
+            start: 0,
+            end: songs.len(), 
+        }
+    }
+    fn blacklist(&mut self, index: usize) {
+        self.blacklist.push(index);
+    }
     fn _all_songs(&self) -> Vec<String> {
         return self.songs.clone();
     }
-    fn _current_index(&self) -> usize {
+    fn current_index(&self) -> usize {
         return self.current_song.clone();
     }
     fn current_name(&self) -> String {
         return self.current_name.clone();
     }
-    fn set_by_pindex(&mut self, index: usize, page: usize) -> usize {
+    fn set_by_pindex(&mut self, index: usize, page: usize, setbynext: bool) -> usize {
+        if index + ((page - 1) * self.typical_page_size) == self.songs.len() {
+            for i in 0..self.songs.len() {
+                if !self.blacklist.contains(&i) {
+                    self.current_song = i;
+                    self.current_name = self.songs[i].clone();
+                    return i as usize;
+                } else if !setbynext {
+                    return self.current_song;
+                }
+
+            }
+        }
+        if !setbynext && self.blacklist.contains(&(index + (page - 1) * self.typical_page_size)) {
+            return 9879871 as usize;
+        } else if setbynext {
+            for i in 1..self.songs.len() {
+                match self.set_by_pindex(index+i, page, false) {
+                    9879871 => (),
+                    _ => {
+                        return self.current_index();
+                    }
+                }
+            }
+            return 9879871 as usize;
+        }
         self.current_song = index + ((page-1) * self.typical_page_size);
         self.current_name = self.songs[self.current_song].clone();
-        index
+        index + ((page-1) * self.typical_page_size)
+        
     }
     fn set_by_next(&mut self) -> usize {
-        self.set_by_pindex(self.current_song+1, 1)
+        self.set_by_pindex(self.current_song+1, 1, true)
     }
     fn stop(&mut self) {
         self.current_song = 0;
@@ -84,27 +127,27 @@ fn rpc_handler(comm_recv: Receiver<(String, &'static str)>) {
 }
 
 #[inline]
-fn calc() {}
+fn calc(maxlen: Duration, curr: Duration) -> usize {
+    ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
+}
 
-fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'static str>) -> bool {
+fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let version = "v1.0".to_string();
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) = mpsc::channel();
     let mut page = 1;
+    let mut fcalc: Duration = Duration::from_secs(0);
     let mut fun_index = 0;
     let mut window = initscr();
     let mut specialinteraction = false;
     let mut local_volume_counter = 0.5;
     let mut isloop = false;
+    let mut maxlen: Duration = Duration::from_secs(0);
     let mut reinit_rpc = true;
     let _rpc_thread = thread::spawn(move || {
         rpc_handler(rpcrx);
     });
-    let mut songs = Songs{
-        songs: glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>(),
-        current_song: 0,
-        current_name: "Nothing".to_string(),
-        typical_page_size: 14,
-    };
+    // songs constructor here =============================================================
+    let mut songs = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     (pancurses::curs_set(0), window.keypad(true), pancurses::noecho(), window.nodelay(true));
     window.resize(20, 50);
     (
@@ -126,7 +169,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
         let page_indicator = format!("Page {}/{}", page, (songs.songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
         window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
         window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_BOLD, 0);
-        {
+        { // song draw
             let start_index = (page-1) * songs.typical_page_size;
             let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.songs.len());
             for (i, song) in songs.songs[start_index..end_index].iter().enumerate() {
@@ -142,13 +185,16 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                     window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
                     window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_BOLD, 1);
 
+                } else if songs.blacklist.contains(&i) {
+                    window.mvaddstr(i as i32 + 1, format!("{} B", display_name).len() as i32, " BL");
+                    window.mvchgat(i as i32 + 1, format!("{} B", display_name).len() as i32, 3, pancurses::A_BOLD, 2);
                 }
             }  
         }
         window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
         window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
         window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
-        window.mvaddstr(maxy-3, 2, "Version  Loop       Crystal      Rpc      Vol ");
+        window.mvaddstr(maxy-3, 2, "Version  Loop                    Rpc      Vol ");
         window.mvaddstr(maxy-2, 2, format!("{}", version));
         window.mvchgat(maxy-2, 2, format!("{}", version).len() as i32, pancurses::A_BOLD, 0);
         window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
@@ -161,18 +207,29 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
             format!("{} ", local_volume_counter)
         );
         window.mvchgat(maxy-2, maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2), (format!("{}  ", local_volume_counter)).len() as i32, pancurses::A_BOLD, 0);
-        if reinit_rpc {
+        if reinit_rpc { // reinit display
             window.mvaddstr(maxy-2, maxx - 15, "init");
             window.mvchgat(maxy-2, maxx - 15, "init".len() as i32, pancurses::A_BOLD, 2);
         } else {
             window.mvaddstr(maxy-2, maxx - 15, "done");
             window.mvchgat(maxy-2, maxx - 15, "done".len() as i32, pancurses::A_BOLD, 1);
         }
+        window.mvaddstr(maxy-3, maxx/2-7, "─".repeat(15));
+        if maxlen != Duration::from_secs(0) {
+            window.mvchgat(maxy-3, maxx/2-7, calc(maxlen, fcalc) as i32, pancurses::A_BOLD, 1);
+        }
         window.refresh();
 
         // DRAW SONGS
         let key_opt = match comm_rx.try_recv() {
-            Ok(_key) => Some(Input::KeyF13),
+            Ok(_key) => match _key.0 {
+                "turn" => Some(Input::KeyF13),
+                "duration" => {
+                    fcalc = _key.1;
+                    Some(Input::KeyF14)
+                },
+                _ => Some(Input::KeyF14),
+            },
             Err(_) => window.getch(),
         };
         if let Some(key) = key_opt {
@@ -184,6 +241,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                     }
                     tx.send(("play_track", songs.current_name())).unwrap();
                     reinit_rpc = true;
+                    maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
                 },
                 Input::Character('q') => break,
                 Input::KeyDown | Input::Character('j') => {
@@ -243,9 +301,12 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                     }
                 },
                 Input::Character('p') => {
-                    songs.set_by_pindex(fun_index, page);
-                    tx.send(("play_track", songs.current_name())).unwrap();
-                    reinit_rpc = true;
+                    if songs.set_by_pindex(fun_index, page, false) != 9879871 {
+                        tx.send(("play_track", songs.current_name())).unwrap();
+                        reinit_rpc = true;
+                        maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
+                        fcalc = Duration::from_secs(0);
+                    }
                 },
                 Input::Character('o') => {
                     if specialinteraction {
@@ -261,8 +322,10 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
                     songs.stop();
                     tx.send(("pause", String::new())).unwrap();
                 },
-                Input::Character('b') => { todo!() },
-                Input::Character('j') => { todo!() }, // SEARCH MODE TODO
+                Input::Character('b') => { 
+                    songs.blacklist(fun_index + ((page-1) * songs.typical_page_size));
+                },
+                Input::Character('h') => { todo!() }, // SEARCH MODE TODO
 
 
                 _ => (),
@@ -284,7 +347,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<&'stati
 fn main() {
     let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>) = mpsc::channel();
     let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>) = mpsc::channel();
-    let (comm_tx, comm_rx): (Sender<&'static str>, Receiver<&'static str>) = mpsc::channel();
+    let (comm_tx, comm_rx): (Sender<(&'static str, Duration)>, Receiver<(&'static str, Duration)>) = mpsc::channel();
     let (sigkill, issigkill): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
@@ -312,7 +375,6 @@ fn main() {
         }
         match rx_proc.try_recv() {
             Ok(val) => {
-                println!("{:?}", val);
                 found_val = (true, val);
                 if val <= Instant::now() {
                     found_val = (false, Instant::now());
@@ -323,7 +385,6 @@ fn main() {
         if found_val.0 != true {
             match ret_value {
                 Ok(val) => {
-                    println!("{:?}", val);
                     found_val = (true, val);
                 },
                 Err(_) => (),
@@ -332,10 +393,12 @@ fn main() {
             if Instant::now() >= found_val.1 {
                 // implement communication between management fn and this to let it know the song ended
                 // thats the entire purpose of this thread
-                comm_tx.send("turn").unwrap();
+                comm_tx.send(("turn", Instant::now() - Instant::now())).unwrap();
                 found_val = (false, Instant::now());
             }
+            comm_tx.send(("duration", found_val.1 - Instant::now())).unwrap();
         }
+        
         thread::sleep(Duration::from_millis(100));
     });
 
@@ -364,10 +427,9 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                 },
                 "volume_df" => {
                     sink.set_volume(0.5);
-                    println!("Volume: {}", sink.volume());
                 },
                 "volume_up" => {
-                    match sink.volume() {  // these manual updates look dumb but volume +-0.1 doesn't work as intended (gives weird float values)
+                    match sink.volume() {  // these manual updates look dumb but volume +-0.1 doesn't work as intended because you can't represent 0.1 using a.2^x with a,x being integer (gives weird float values)
                         0.0 => sink.set_volume(0.1), // + ruining the volume control entirely, i speak from experience.
                         0.1 => sink.set_volume(0.2),
                         0.2 => sink.set_volume(0.3),
@@ -381,7 +443,6 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                         1.0 => (),
                         _ => sink.set_volume(0.5),
                     }
-                    println!("Volume: {}", sink.volume());
                     
                 },
                 "volume_down" => {
@@ -399,7 +460,6 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                         0.0 => (),
                         _ => sink.set_volume(0.5),
                     }
-                    println!("Volume: {}", sink.volume());
                 },
                 "play_track" => {
                     let file: File = File::open(value.clone())?;
