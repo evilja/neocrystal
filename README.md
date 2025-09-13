@@ -16,10 +16,8 @@ l -> loop mode
 
 o -> special interaction mode
 
-TODO: 
+b -> blacklist song (unreachable by both auto next and p button)
 
-Progress bar instead of plain "Crystal" text
-
-Blacklist songs (prevent them from playing)
+TODO
 
 Search songs or playlist, they work similarly in my head so I'll do the one I decide to do at the moment lmao
