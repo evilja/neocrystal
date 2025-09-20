@@ -9,7 +9,7 @@ use rodio::*;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::path::Path;
 use mp3_duration;
-use pancurses::{initscr, Input};
+use pancurses::{initscr, Input, Window};
 use glob::glob;
 use discord_presence::{Client};
 #[derive(Clone)]
@@ -19,8 +19,7 @@ struct Songs {
     current_name: String,
     typical_page_size: usize,
     blacklist: Vec<usize>, 
-    start: usize,
-    end: usize,
+    stophandler: bool,
 }
 
 impl Songs {
@@ -31,20 +30,31 @@ impl Songs {
             current_name: "Nothing".to_string(),
             typical_page_size: 14,
             blacklist: vec![],
-            start: 0,
-            end: songs.len(), 
+            stophandler: true,
         }
     }
     fn blacklist(&mut self, index: usize) {
+        for i in 0..self.blacklist.len() {
+            if self.blacklist[i] == index {
+                self.blacklist.remove(i);
+                return;
+            }
+        }
         self.blacklist.push(index);
     }
     fn _all_songs(&self) -> Vec<String> {
         return self.songs.clone();
     }
     fn current_index(&self) -> usize {
+        if self.stophandler {
+            return 0;
+        }
         return self.current_song.clone();
     }
     fn current_name(&self) -> String {
+        if self.stophandler {
+            return "Nothing".to_string();
+        }
         return self.current_name.clone();
     }
     fn set_by_pindex(&mut self, index: usize, page: usize, setbynext: bool) -> usize {
@@ -53,8 +63,10 @@ impl Songs {
                 if !self.blacklist.contains(&i) {
                     self.current_song = i;
                     self.current_name = self.songs[i].clone();
+                    self.stophandler = false;
                     return i as usize;
                 } else if !setbynext {
+                    self.stophandler = false;
                     return self.current_song;
                 }
 
@@ -67,14 +79,17 @@ impl Songs {
                 match self.set_by_pindex(index+i, page, false) {
                     9879871 => (),
                     _ => {
+                        self.stophandler = false;
                         return self.current_index();
                     }
                 }
             }
+            self.stophandler = true;
             return 9879871 as usize;
         }
         self.current_song = index + ((page-1) * self.typical_page_size);
         self.current_name = self.songs[self.current_song].clone();
+        self.stophandler = false;
         index + ((page-1) * self.typical_page_size)
         
     }
@@ -82,8 +97,7 @@ impl Songs {
         self.set_by_pindex(self.current_song+1, 1, true)
     }
     fn stop(&mut self) {
-        self.current_song = 0;
-        self.current_name = "Nothing".to_string();
+        self.stophandler = true;
     }
 }
 
@@ -131,23 +145,69 @@ fn calc(maxlen: Duration, curr: Duration) -> usize {
     ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
 }
 
-fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
-    let version = "v1.0".to_string();
-    let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) = mpsc::channel();
-    let mut page = 1;
-    let mut fcalc: Duration = Duration::from_secs(0);
-    let mut fun_index = 0;
-    let mut window = initscr();
-    let mut specialinteraction = false;
-    let mut local_volume_counter = 0.5;
-    let mut isloop = false;
-    let mut maxlen: Duration = Duration::from_secs(0);
-    let mut reinit_rpc = true;
-    let _rpc_thread = thread::spawn(move || {
-        rpc_handler(rpcrx);
-    });
-    // songs constructor here =============================================================
-    let mut songs = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
+fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page: usize, local_volume_counter: f64, 
+          version: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize) {
+    window.erase();
+    window.attrset(pancurses::A_NORMAL); // Reset to normal attributes
+    window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
+    let page_indicator = format!("Page {}/{}", page, (songs.songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
+    window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
+    window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_BOLD, 0);
+    { // song draw
+        let start_index = (page-1) * songs.typical_page_size;
+        let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.songs.len());
+        for (i, song) in songs.songs[start_index..end_index].iter().enumerate() {
+            let display_name = song.replace("music/", "").replace("music\\", "").replace(".mp3", "");
+            window.mvaddstr(i as i32 + 1, 2, display_name.as_str());
+            window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_BOLD, 0);
+            if i == fun_index {
+                // highlight with color pair 3
+                window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_BOLD | pancurses::COLOR_PAIR(3), 3);
+            }
+            if song == &songs.current_name {
+                // highlight with a green * at the end or yellow if paused (stophandler)
+                window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
+                window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_BOLD, match songs.stophandler {true => 4, false => 1});
+
+            } else if songs.blacklist.contains(&i) {
+                window.mvaddstr(i as i32 + 1, format!("{} B", display_name).len() as i32, " BL");
+                window.mvchgat(i as i32 + 1, format!("{} B", display_name).len() as i32, 3, pancurses::A_BOLD, 2);
+            }
+        }  
+    }
+    window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
+    window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name.replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
+    window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
+    window.mvaddstr(maxy-3, 2, "Version  Loop                    Rpc      Vol ");
+    window.mvaddstr(maxy-2, 2, format!("{}", version));
+    window.mvchgat(maxy-2, 2, format!("{}", version).len() as i32, pancurses::A_BOLD, 0);
+    window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
+    window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_BOLD, match isloop { true => 1, false => 2 });
+    /* singer info at maxx/2-4 maxy-2 TODO / abandon online plans
+    window.mvaddstr(maxy-2, maxx/2-4, " offline");
+    window.mvchgat(maxy-2, maxx/2-4, " offline".len() as i32, pancurses::A_BOLD, 2);
+    */
+    window.mvaddstr(
+        maxy-2,
+        maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2),
+        format!("{} ", local_volume_counter)
+    );
+    window.mvchgat(maxy-2, maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2), (format!("{}  ", local_volume_counter)).len() as i32, pancurses::A_BOLD, 0);
+    if reinit_rpc { // reinit display
+        window.mvaddstr(maxy-2, maxx - 15, "init");
+        window.mvchgat(maxy-2, maxx - 15, "init".len() as i32, pancurses::A_BOLD, 2);
+    } else {
+        window.mvaddstr(maxy-2, maxx - 15, "done");
+        window.mvchgat(maxy-2, maxx - 15, "done".len() as i32, pancurses::A_BOLD, 1);
+    }
+    window.mvaddstr(maxy-3, maxx/2-7, "─".repeat(15));
+    if maxlen != Duration::from_secs(0) {
+        window.mvchgat(maxy-3, maxx/2-7, calc(maxlen, fcalc) as i32, pancurses::A_BOLD, 1);
+    }
+    window.refresh();
+}
+
+fn init_curses(window: &mut Window) {
     (pancurses::curs_set(0), window.keypad(true), pancurses::noecho(), window.nodelay(true));
     window.resize(20, 50);
     (
@@ -156,71 +216,39 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
         pancurses::init_pair(2, pancurses::COLOR_RED, pancurses::COLOR_BLACK),
         pancurses::init_pair(0, pancurses::COLOR_WHITE, pancurses::COLOR_BLACK),
         pancurses::init_pair(3, pancurses::COLOR_BLACK, pancurses::COLOR_WHITE),
+        pancurses::init_pair(4, pancurses::COLOR_YELLOW, pancurses::COLOR_BLACK),
         window.attron(pancurses::A_BOLD),
         window.attron(pancurses::A_NORMAL),
     );
-    // enable green color
+}
+
+fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
+    let version = "v1.0".to_string();
+    let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) 
+                                    = mpsc::channel();
+    let mut page                    = 1;
+    let mut fcalc: Duration         = Duration::from_secs(0);
+    let mut fun_index               = 0;
+    let mut window                  = initscr();
+    let mut specialinteraction      = false;
+    let mut local_volume_counter    = 0.5;
+    let mut isloop                  = false;
+    let mut maxlen: Duration        = Duration::from_secs(0);
+    let mut reinit_rpc              = true;
+
+    let _rpc_thread = thread::spawn(move || {
+        rpc_handler(rpcrx);
+    });
+
+    // songs constructor here =============================================================
+    let mut songs = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
+
+    init_curses(&mut window);
+
     let (maxy, maxx) = window.get_max_yx();
     loop {
-        // => => => REDRAW HERE <= <= <= 
-        window.erase();
-        window.attrset(pancurses::A_NORMAL); // Reset to normal attributes
-        window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
-        let page_indicator = format!("Page {}/{}", page, (songs.songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
-        window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
-        window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_BOLD, 0);
-        { // song draw
-            let start_index = (page-1) * songs.typical_page_size;
-            let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.songs.len());
-            for (i, song) in songs.songs[start_index..end_index].iter().enumerate() {
-                let display_name = song.replace("music/", "").replace("music\\", "").replace(".mp3", "");
-                window.mvaddstr(i as i32 + 1, 2, display_name.as_str());
-                window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_BOLD, 0);
-                if i == fun_index {
-                    // highlight with color pair 3
-                    window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_BOLD | pancurses::COLOR_PAIR(3), 3);
-                }
-                if song == &songs.current_name {
-                    // highlight with a green * at the end
-                    window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
-                    window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_BOLD, 1);
+        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter, version.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
 
-                } else if songs.blacklist.contains(&i) {
-                    window.mvaddstr(i as i32 + 1, format!("{} B", display_name).len() as i32, " BL");
-                    window.mvchgat(i as i32 + 1, format!("{} B", display_name).len() as i32, 3, pancurses::A_BOLD, 2);
-                }
-            }  
-        }
-        window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
-        window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
-        window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
-        window.mvaddstr(maxy-3, 2, "Version  Loop                    Rpc      Vol ");
-        window.mvaddstr(maxy-2, 2, format!("{}", version));
-        window.mvchgat(maxy-2, 2, format!("{}", version).len() as i32, pancurses::A_BOLD, 0);
-        window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
-        window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_BOLD, match isloop { true => 1, false => 2 });
-        window.mvaddstr(maxy-2, maxx/2-4, " offline");
-        window.mvchgat(maxy-2, maxx/2-4, " offline".len() as i32, pancurses::A_BOLD, 2);
-        window.mvaddstr(
-            maxy-2,
-            maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2),
-            format!("{} ", local_volume_counter)
-        );
-        window.mvchgat(maxy-2, maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2), (format!("{}  ", local_volume_counter)).len() as i32, pancurses::A_BOLD, 0);
-        if reinit_rpc { // reinit display
-            window.mvaddstr(maxy-2, maxx - 15, "init");
-            window.mvchgat(maxy-2, maxx - 15, "init".len() as i32, pancurses::A_BOLD, 2);
-        } else {
-            window.mvaddstr(maxy-2, maxx - 15, "done");
-            window.mvchgat(maxy-2, maxx - 15, "done".len() as i32, pancurses::A_BOLD, 1);
-        }
-        window.mvaddstr(maxy-3, maxx/2-7, "─".repeat(15));
-        if maxlen != Duration::from_secs(0) {
-            window.mvchgat(maxy-3, maxx/2-7, calc(maxlen, fcalc) as i32, pancurses::A_BOLD, 1);
-        }
-        window.refresh();
-
-        // DRAW SONGS
         let key_opt = match comm_rx.try_recv() {
             Ok(_key) => match _key.0 {
                 "turn" => Some(Input::KeyF13),
@@ -233,7 +261,6 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
             Err(_) => window.getch(),
         };
         if let Some(key) = key_opt {
-            // write to logfile
             match key {
                 Input::KeyF13 => { // song ended
                     if !isloop {
@@ -264,7 +291,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                             }
                         }
                     } else {
-                        if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
+                        if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 { // protection for page size
                             fun_index += 1;
                         } else if (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
                             page += 1;
@@ -301,7 +328,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                     }
                 },
                 Input::Character('p') => {
-                    if songs.set_by_pindex(fun_index, page, false) != 9879871 {
+                    if songs.set_by_pindex(fun_index, page, false) != 9879871 { // magic number 9879871 means not found
                         tx.send(("play_track", songs.current_name())).unwrap();
                         reinit_rpc = true;
                         maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
@@ -325,6 +352,10 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                 Input::Character('b') => { 
                     songs.blacklist(fun_index + ((page-1) * songs.typical_page_size));
                 },
+                Input::Character('r') => {
+                    songs.stophandler = false;
+                    tx.send(("resume", String::new())).unwrap();
+                }
                 Input::Character('h') => { todo!() }, // SEARCH MODE TODO
 
 
@@ -345,10 +376,10 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
 }
 
 fn main() {
-    let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>) = mpsc::channel();
-    let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>) = mpsc::channel();
-    let (comm_tx, comm_rx): (Sender<(&'static str, Duration)>, Receiver<(&'static str, Duration)>) = mpsc::channel();
-    let (sigkill, issigkill): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+    let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>)                = mpsc::channel();
+    let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>)                                    = mpsc::channel();
+    let (comm_tx, comm_rx): (Sender<(&'static str, Duration)>, Receiver<(&'static str, Duration)>)  = mpsc::channel();
+    let (sigkill, issigkill): (Sender<bool>, Receiver<bool>)                                        = mpsc::channel();
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
             Ok(_) => {
@@ -361,8 +392,8 @@ fn main() {
     });
     tx.send(("volume_df", String::new())).unwrap();
     //tx.send(("play_track", "Psychogram.mp3".to_string())).unwrap(); // to test comm
-    let mut found_val = (false, Instant::now());
-    let ret_value: Result<Instant, TryRecvError> = Err(TryRecvError::Empty);
+    let mut found_val                                                                               = (false, Instant::now());
+    let ret_value: Result<Instant, TryRecvError>                                                    = Err(TryRecvError::Empty);
     let thrloop: thread::JoinHandle<()> = thread::spawn(move || loop {
         // i need a kill thing for this thread, because it doesn't have a natural break
         // because it is supposed to live as long as the program runs
@@ -410,9 +441,8 @@ fn main() {
 }
 
 fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<String, Box<dyn std::error::Error>> {
-    let stream_handle: OutputStream = rodio::OutputStreamBuilder::open_default_stream()
-        .expect("open default audio stream");
-    let sink = rodio::Sink::connect_new(&stream_handle.mixer());
+    let stream_handle: OutputStream     = rodio::OutputStreamBuilder::open_default_stream().expect("open default audio stream");
+    let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
     loop {
         if let Ok((command, value)) = receiver.recv_timeout(Duration::from_millis(100)) {
             match command {
