@@ -18,6 +18,8 @@ o -> special interaction mode
 
 b -> blacklist song (unreachable by both auto next and p button)
 
+r -> resume
+
 TODO
 
 Search songs or playlist, they work similarly in my head so I'll do the one I decide to do at the moment lmao
