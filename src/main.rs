@@ -58,7 +58,7 @@ impl Songs {
         return self.current_name.clone();
     }
     fn set_by_pindex(&mut self, index: usize, page: usize, setbynext: bool) -> usize {
-        if index + ((page - 1) * self.typical_page_size) == self.songs.len() {
+        if index + ((page - 1) * self.typical_page_size) == self.songs.len() { // if given index is the last song, search entire songs vector for any available
             for i in 0..self.songs.len() {
                 if !self.blacklist.contains(&i) {
                     self.current_song = i;
@@ -75,12 +75,12 @@ impl Songs {
         if !setbynext && self.blacklist.contains(&(index + (page - 1) * self.typical_page_size)) {
             return 9879871 as usize;
         } else if setbynext {
-            for i in 1..self.songs.len() {
+            for i in 0..self.songs.len() {
                 match self.set_by_pindex(index+i, page, false) {
                     9879871 => (),
                     _ => {
                         self.stophandler = false;
-                        return self.current_index();
+                        return self.current_song;
                     }
                 }
             }
@@ -269,7 +269,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                     }
                     tx.send(("play_track", songs.current_name())).unwrap();
                     reinit_rpc = true;
-                    maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
+                    maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
                 },
 
                 Input::Character('q') => break,
@@ -336,7 +336,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                     if songs.set_by_pindex(fun_index, page, false) != 9879871 { // magic number 9879871 means not found
                         tx.send(("play_track", songs.current_name())).unwrap();
                         reinit_rpc = true;
-                        maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
+                        maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
                         fcalc = Duration::from_secs(0);
                     }
                 },
@@ -376,8 +376,9 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
         } else {
             thread::sleep(Duration::from_millis(50));
         }
+
         if reinit_rpc {
-            rpctx.send((songs.current_name().to_string(), "v1.1 (readability update lmao)")).unwrap();
+            rpctx.send((songs.current_name().to_string(), "v1.1r")).unwrap();
             reinit_rpc = false;
         }
 
@@ -386,11 +387,14 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
     true
 }
 
-fn main() {
+fn main() { // establish communications and threads, then give the job to crystal_manager fn
     let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>)                = mpsc::channel();
     let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>)                                    = mpsc::channel();
     let (comm_tx, comm_rx): (Sender<(&'static str, Duration)>, Receiver<(&'static str, Duration)>)  = mpsc::channel();
     let (sigkill, issigkill): (Sender<bool>, Receiver<bool>)                                        = mpsc::channel();
+    let mut found_val                                                                               = (false, Instant::now());
+    let ret_value: Result<Instant, TryRecvError>                                                    = Err(TryRecvError::Empty);
+
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
             Ok(_) => {
@@ -401,13 +405,9 @@ fn main() {
             }
         }
     });
+
     tx.send(("volume_df", String::new())).unwrap();
-    //tx.send(("play_track", "Psychogram.mp3".to_string())).unwrap(); // to test comm
-    let mut found_val                                                                               = (false, Instant::now());
-    let ret_value: Result<Instant, TryRecvError>                                                    = Err(TryRecvError::Empty);
     let thrloop: thread::JoinHandle<()> = thread::spawn(move || loop {
-        // i need a kill thing for this thread, because it doesn't have a natural break
-        // because it is supposed to live as long as the program runs
         match issigkill.try_recv() {
             Ok(_) => {
                 println!("Killing loop thread");
@@ -433,8 +433,6 @@ fn main() {
             }
         } else {
             if Instant::now() >= found_val.1 {
-                // implement communication between management fn and this to let it know the song ended
-                // thats the entire purpose of this thread
                 comm_tx.send(("turn", Instant::now() - Instant::now())).unwrap();
                 found_val = (false, Instant::now());
             }
@@ -454,6 +452,7 @@ fn main() {
 fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<String, Box<dyn std::error::Error>> {
     let stream_handle: OutputStream     = rodio::OutputStreamBuilder::open_default_stream().expect("open default audio stream");
     let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
+    let mut cached: String = "uinit".to_string();
     loop {
         if let Ok((command, value)) = receiver.recv_timeout(Duration::from_millis(100)) {
             match command {
@@ -461,7 +460,13 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                     sink.pause();
                     transmitter.send(Instant::now())?; // send a time in the past to indicate paused state
                 },
-                "resume" => sink.play(),
+                "resume" => {
+                    sink.play();
+                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
+                        Ok(()) => (),
+                        Err(_) => (),
+                    }
+                },
                 "stop" => {
                     sink.stop();
                     break;
@@ -470,9 +475,9 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                     sink.set_volume(0.5);
                 },
                 "volume_up" => {
-                    match sink.volume() {  // these manual updates look dumb but volume +-0.1 doesn't work as intended because you can't represent 0.1 using a.2^x with a,x being integer (gives weird float values)
-                        0.0 => sink.set_volume(0.1), // + ruining the volume control entirely, i speak from experience.
-                        0.1 => sink.set_volume(0.2),
+                    match sink.volume() {            // these manual updates look dumb but volume +-0.1 doesn't work as intended
+                        0.0 => sink.set_volume(0.1), // because you can't represent 0.1 using a.2^x with a,x being integer (gives weird float values)
+                        0.1 => sink.set_volume(0.2), // ruining the volume control entirely.
                         0.2 => sink.set_volume(0.3),
                         0.3 => sink.set_volume(0.4),
                         0.4 => sink.set_volume(0.5),
@@ -514,6 +519,7 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
                         Err(_) => (),
                     }
                     sink.play();
+                    cached = value;
                 },
                 _ => return Err("Unknown command".into()),
             }
@@ -521,3 +527,4 @@ fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<In
     }
     Ok("Stopped".to_string())
 }
+
