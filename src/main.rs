@@ -225,7 +225,7 @@ fn init_curses(window: &mut Window) {
 fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) 
                                     = mpsc::channel();
-    let version                     = "v1.0".to_string();
+    let version                     = "v1.1r".to_string();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
     let mut fun_index               = 0;
