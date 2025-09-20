@@ -223,9 +223,9 @@ fn init_curses(window: &mut Window) {
 }
 
 fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
-    let version = "v1.0".to_string();
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) 
                                     = mpsc::channel();
+    let version                     = "v1.0".to_string();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
     let mut fun_index               = 0;
@@ -260,6 +260,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
             },
             Err(_) => window.getch(),
         };
+
         if let Some(key) = key_opt {
             match key {
                 Input::KeyF13 => { // song ended
@@ -270,7 +271,9 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                     reinit_rpc = true;
                     maxlen = mp3_duration::from_path(Path::new(songs.current_name().as_str())).unwrap();
                 },
+
                 Input::Character('q') => break,
+
                 Input::KeyDown | Input::Character('j') => {
                     if specialinteraction {
                         tx.send(("volume_down", String::new())).unwrap();
@@ -299,6 +302,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                         }
                     }
                 },
+
                 Input::KeyUp | Input::Character('u') => {
                     if specialinteraction {
                         tx.send(("volume_up", String::new())).unwrap();
@@ -327,6 +331,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                         }
                     }
                 },
+
                 Input::Character('p') => {
                     if songs.set_by_pindex(fun_index, page, false) != 9879871 { // magic number 9879871 means not found
                         tx.send(("play_track", songs.current_name())).unwrap();
@@ -335,6 +340,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                         fcalc = Duration::from_secs(0);
                     }
                 },
+
                 Input::Character('o') => {
                     if specialinteraction {
                         specialinteraction = false;
@@ -342,20 +348,25 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
                         specialinteraction = true;
                     }
                 },
+
                 Input::Character('l') => {
                     isloop = !isloop;
                 },
+
                 Input::Character('s') => {
                     songs.stop();
                     tx.send(("pause", String::new())).unwrap();
                 },
+
                 Input::Character('b') => { 
                     songs.blacklist(fun_index + ((page-1) * songs.typical_page_size));
                 },
+
                 Input::Character('r') => {
                     songs.stophandler = false;
                     tx.send(("resume", String::new())).unwrap();
-                }
+                },
+
                 Input::Character('h') => { todo!() }, // SEARCH MODE TODO
 
 
@@ -366,7 +377,7 @@ fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'stat
             thread::sleep(Duration::from_millis(50));
         }
         if reinit_rpc {
-            rpctx.send((songs.current_name().to_string(), "v1.0")).unwrap();
+            rpctx.send((songs.current_name().to_string(), "v1.1 (readability update lmao)")).unwrap();
             reinit_rpc = false;
         }
 
