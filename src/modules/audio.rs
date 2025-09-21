@@ -60,6 +60,27 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     sink.play();
                     cached = value;
                 },
+                "forward" => {
+                    sink.try_seek(sink.get_pos()+Duration::from_secs(5))?;
+                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
+                        Ok(()) => (),
+                        Err(_) => (),
+                    }
+                },
+                "back" =>{
+                    let cachegetpos = sink.get_pos();
+                    let file: File = File::open(cached.clone())?;
+                    let source: Decoder<BufReader<File>> = Decoder::new(BufReader::new(file))?;
+                    sink.clear();
+
+                    sink.append(source);
+                    sink.try_seek(cachegetpos - Duration::from_secs(5))?;
+                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
+                        Ok(()) => (),
+                        Err(_) => (),
+                    }
+                    sink.play();
+                },
                 _ => return Err("Unknown command".into()),
             }
         }

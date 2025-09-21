@@ -1,4 +1,4 @@
-
+use rand::prelude::*;
 
 #[derive(Clone)]
 pub struct Songs {
@@ -8,6 +8,7 @@ pub struct Songs {
     pub typical_page_size: usize,
     pub blacklist: Vec<usize>, 
     pub stophandler: bool,
+    pub shuffle: bool,
 }
 
 #[inline]
@@ -42,6 +43,7 @@ impl Songs {
             typical_page_size: 14,
             blacklist: vec![],
             stophandler: true,
+            shuffle: false,
         }
     }
     pub fn blacklist(&mut self, index: usize) {
@@ -82,6 +84,15 @@ impl Songs {
     }
     pub fn set_by_next(&mut self) -> Result<usize, ()> {
         let last_possible_index = self.songs.len() - 1;
+        if self.shuffle {
+            for _ in 0..last_possible_index {
+                match self.set_by_pindex(*(0..last_possible_index).collect::<Vec<usize>>().choose(&mut rand::rng()).unwrap(), 1) {
+                    Ok(_) => return Ok(0),
+                    Err(_) => (),
+                }
+            }
+            return Err(());
+        }
         for i in self.current_song+1..last_possible_index {
             if !self.blacklist.contains(&i) {
                 self.current_song = i;
@@ -102,5 +113,8 @@ impl Songs {
     }
     pub fn stop(&mut self) {
         self.stophandler = true;
+    }
+    pub fn shuffle(&mut self) {
+        self.shuffle = !self.shuffle;
     }
 }

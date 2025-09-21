@@ -122,7 +122,15 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     songs.stophandler = false;
                     tx.send(("resume", String::new())).unwrap();
                 },
+                Input::KeyRight => {
+                    tx.send(("forward", String::new())).unwrap();
 
+                }
+                Input::KeyLeft => {
+                    tx.send(("back", String::new())).unwrap();
+                    
+                },
+                Input::Character('f') => { songs.shuffle(); },
                 Input::Character('h') => { todo!() }, // SEARCH MODE TODO
 
 
