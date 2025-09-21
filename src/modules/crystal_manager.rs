@@ -7,18 +7,18 @@ use std::path::Path;
 use mp3_duration;
 use pancurses::{initscr, Input};
 use glob::glob;
-use super::{songs::Songs, presence::rpc_handler, curses::*};
+use super::{songs::Songs, presence::rpc_handler, curses::*, utils::Volume};
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) 
                                     = mpsc::channel();
-    let version                     = "v1.1r".to_string();
+    let version                     = "v1.2modular".to_string();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
     let mut fun_index               = 0;
     let mut window                  = initscr();
     let mut specialinteraction      = false;
-    let mut local_volume_counter    = 0.5;
+    let mut local_volume_counter    = Volume {steps: 50, step_div: 5};
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = true;
@@ -29,7 +29,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     init_curses(&mut window);
     let (maxy, maxx)                = window.get_max_yx();
     loop {
-        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter, version.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
+        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter.steps, version.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
 
         let key_opt = match comm_rx.try_recv() {
             Ok(_key) => match _key.0 {
@@ -47,7 +47,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
             match key {
                 Input::KeyF13 => { // song ended
                     if !isloop {
-                        songs.set_by_next();
+                        songs.set_by_next().unwrap();
                     }
                     tx.send(("play_track", songs.current_name())).unwrap();
                     reinit_rpc = true;
@@ -59,21 +59,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 Input::KeyDown | Input::Character('j') => {
                     if specialinteraction {
                         tx.send(("volume_down", String::new())).unwrap();
-                        if local_volume_counter > 0.0 {
-                            match local_volume_counter {  
-                                1.0 => local_volume_counter = 0.9, 
-                                0.9 => local_volume_counter = 0.8,
-                                0.8 => local_volume_counter = 0.7,
-                                0.7 => local_volume_counter = 0.6,
-                                0.6 => local_volume_counter = 0.5,
-                                0.5 => local_volume_counter = 0.4,
-                                0.4 => local_volume_counter = 0.3,
-                                0.3 => local_volume_counter = 0.2,
-                                0.2 => local_volume_counter = 0.1,
-                                0.1 => local_volume_counter = 0.0,
-                                0.0 => (),
-                                _ => (),
-                            }
+                        if local_volume_counter.as_f64() > 0.0 {
+                            local_volume_counter.step_down();
                         }
                     } else {
                         if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 { // protection for page size
@@ -88,21 +75,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 Input::KeyUp | Input::Character('u') => {
                     if specialinteraction {
                         tx.send(("volume_up", String::new())).unwrap();
-                        if local_volume_counter < 1.0 {
-                            match local_volume_counter {  
-                                0.0 => local_volume_counter = 0.1, 
-                                0.1 => local_volume_counter = 0.2,
-                                0.2 => local_volume_counter = 0.3,
-                                0.3 => local_volume_counter = 0.4,
-                                0.4 => local_volume_counter = 0.5,
-                                0.5 => local_volume_counter = 0.6,
-                                0.6 => local_volume_counter = 0.7,
-                                0.7 => local_volume_counter = 0.8,
-                                0.8 => local_volume_counter = 0.9,
-                                0.9 => local_volume_counter = 1.0,
-                                1.0 => (),
-                                _ => (),
-                            }
+                        if local_volume_counter.as_f64() < 1.0 {
+                            local_volume_counter.step_up();
                         }
                     } else {
                         if fun_index > 0 {
@@ -115,7 +89,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 },
 
                 Input::Character('p') => {
-                    if songs.set_by_pindex(fun_index, page, false) != 9879871 { // magic number 9879871 means not found
+                    if songs.set_by_pindex(fun_index, page) != Err(0) {
                         tx.send(("play_track", songs.current_name())).unwrap();
                         reinit_rpc = true;
                         maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
@@ -160,7 +134,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         }
 
         if reinit_rpc {
-            rpctx.send((songs.current_name().to_string(), "v1.1r")).unwrap();
+            rpctx.send((songs.current_name().to_string(), "v1.2modular")).unwrap();
             reinit_rpc = false;
         }
 

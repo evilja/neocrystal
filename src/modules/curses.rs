@@ -7,7 +7,7 @@ pub fn calc(maxlen: Duration, curr: Duration) -> usize {
     ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
 }
 
-pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page: usize, local_volume_counter: f64, 
+pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page: usize, local_volume_counter: u8, 
           version: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize) {
     window.erase();
     window.attrset(pancurses::A_NORMAL); // Reset to normal attributes

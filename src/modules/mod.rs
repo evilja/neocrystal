@@ -3,3 +3,4 @@ pub mod presence;
 pub mod curses;
 pub mod audio;
 pub mod crystal_manager;
+pub mod utils;

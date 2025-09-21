@@ -5,13 +5,15 @@ use rodio::*;
 use std::sync::mpsc::{Receiver, Sender};
 use std::path::Path;
 use mp3_duration;
+use super::utils::Volume;
 
 
 
 pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<String, Box<dyn std::error::Error>> {
     let stream_handle: OutputStream     = rodio::OutputStreamBuilder::open_default_stream().expect("open default audio stream");
     let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
-    let mut cached: String = "uinit".to_string();
+    let mut cached: String              = "uinit".to_string();
+    let mut local_volume_counter        = Volume {steps: 50, step_div: 5};
     loop {
         if let Ok((command, value)) = receiver.recv_timeout(Duration::from_millis(100)) {
             match command {
@@ -32,39 +34,17 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                 },
                 "volume_df" => {
                     sink.set_volume(0.5);
+                    local_volume_counter.steps = 50;
                 },
                 "volume_up" => {
-                    match sink.volume() {            // these manual updates look dumb but volume +-0.1 doesn't work as intended
-                        0.0 => sink.set_volume(0.1), // because you can't represent 0.1 using a.2^x with a,x being integer (gives weird float values)
-                        0.1 => sink.set_volume(0.2), // ruining the volume control entirely.
-                        0.2 => sink.set_volume(0.3),
-                        0.3 => sink.set_volume(0.4),
-                        0.4 => sink.set_volume(0.5),
-                        0.5 => sink.set_volume(0.6),
-                        0.6 => sink.set_volume(0.7),
-                        0.7 => sink.set_volume(0.8),
-                        0.8 => sink.set_volume(0.9),
-                        0.9 => sink.set_volume(1.0),
-                        1.0 => (),
-                        _ => sink.set_volume(0.5),
-                    }
+
+                    local_volume_counter.step_up();
+                    sink.set_volume(local_volume_counter.as_f32())
                     
                 },
                 "volume_down" => {
-                    match sink.volume() {
-                        1.0 => sink.set_volume(0.9),
-                        0.9 => sink.set_volume(0.8),
-                        0.8 => sink.set_volume(0.7),
-                        0.7 => sink.set_volume(0.6),
-                        0.6 => sink.set_volume(0.5),
-                        0.5 => sink.set_volume(0.4),
-                        0.4 => sink.set_volume(0.3),
-                        0.3 => sink.set_volume(0.2),
-                        0.2 => sink.set_volume(0.1),
-                        0.1 => sink.set_volume(0.0),
-                        0.0 => (),
-                        _ => sink.set_volume(0.5),
-                    }
+                    local_volume_counter.step_down();
+                    sink.set_volume(local_volume_counter.as_f32())
                 },
                 "play_track" => {
                     let file: File = File::open(value.clone())?;
