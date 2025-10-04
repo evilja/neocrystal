@@ -58,10 +58,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::KeyDown | Input::Character('j') => {
                     if specialinteraction {
-                        tx.send(("volume_down", String::new())).unwrap();
                         if local_volume_counter.as_f64() > 0.0 {
                             local_volume_counter.step_down();
                         }
+                        tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
                         if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 { // protection for page size
                             fun_index += 1;
@@ -74,10 +74,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::KeyUp | Input::Character('u') => {
                     if specialinteraction {
-                        tx.send(("volume_up", String::new())).unwrap();
                         if local_volume_counter.as_f64() < 1.0 {
                             local_volume_counter.step_up();
                         }
+                        tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
                         if fun_index > 0 {
                             fun_index -= 1;
@@ -132,7 +132,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 },
                 Input::Character('f') => { songs.shuffle(); },
                 Input::Character('h') => { todo!() }, // SEARCH MODE TODO
-
+                Input::Character('g') => { page = 1; fun_index = 0; },
 
                 _ => (),
             }
