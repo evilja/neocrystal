@@ -30,3 +30,7 @@ r -> resume
 TODO
 
 Search songs or playlist, they work similarly in my head so I'll do the one I decide to do at the moment lmao
+
+I'M AWARE
+
+DiscordRPC does NOT update with SEEK functions.
