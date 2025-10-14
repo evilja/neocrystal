@@ -10,8 +10,7 @@ use glob::glob;
 use super::{songs::Songs, presence::rpc_handler, curses::*, utils::Volume};
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
-    let (rpctx, rpcrx): (Sender<(String, &'static str)>, Receiver<(String, &'static str)>) 
-                                    = mpsc::channel();
+    let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
     let version                     = "v1.2modular".to_string();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
@@ -21,7 +20,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut local_volume_counter    = Volume {steps: 50, step_div: 5};
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
-    let mut reinit_rpc              = true;
+    let mut reinit_rpc              = false;
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
@@ -38,7 +37,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     fcalc = _key.1;
                     Some(Input::KeyF14)
                 },
-                _ => Some(Input::KeyF14),
+                _ => Some(Input::KeyF15),
             },
             Err(_) => window.getch(),
         };
@@ -52,7 +51,13 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     tx.send(("play_track", songs.current_name())).unwrap();
                     reinit_rpc = true;
                     maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
+                    rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                 },
+                Input::KeyF14 => { //duration sent
+                    if reinit_rpc {
+                        reinit_rpc = false;
+                    }
+                }
 
                 Input::Character('q') => break,
 
@@ -93,6 +98,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         tx.send(("play_track", songs.current_name())).unwrap();
                         reinit_rpc = true;
                         maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
+                        rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                         fcalc = Duration::from_secs(0);
                     }
                 },
@@ -140,13 +146,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         } else {
             thread::sleep(Duration::from_millis(50));
         }
-
-        if reinit_rpc {
-            rpctx.send((songs.current_name().to_string(), "v1.2modular")).unwrap();
-            reinit_rpc = false;
-        }
+        
 
     }
-    rpctx.send(("stop".to_string(), "stop")).unwrap();
+    rpctx.send(("stop".to_string(), 0)).unwrap();
     true
 }
