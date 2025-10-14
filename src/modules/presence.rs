@@ -17,6 +17,9 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
     })
     .persist();
     drpc.start();
+    let mut st_ts: u64;
+    let mut title: String;
+    let mut ed_ts: u64;
     loop {
         match comm_recv.recv() {
             Ok((x, y)) => {
@@ -24,16 +27,16 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     break;
                 }
                 drpc.clear_activity().unwrap();
-                let st_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-                let title = &artist_data(&x);
-                let ed_ts = st_ts + y;
+                st_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                title = artist_data(&x);
+                ed_ts = st_ts + y;
                 println!("st_ts is {}, ed_ts is {}", st_ts, ed_ts);
                 
                 loop {
                     match drpc.set_activity(|act| {
                     act
                         .activity_type(ActivityType::Listening)
-                        .state(title)
+                        .state(&title)
                         .details(x.clone().replace("music/", "").replace("music\\", "").replace(".mp3", ""))
                         .assets(|ass| {
                             ass.small_image("github")
