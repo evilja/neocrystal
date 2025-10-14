@@ -1,6 +1,15 @@
 use pancurses::Window;
 use std::time::Duration;
 use super::songs::Songs;
+use libc;
+use std::ffi::CString;
+
+pub fn init_locale() {
+    unsafe {
+        let locale = CString::new("").unwrap();
+        libc::setlocale(libc::LC_ALL, locale.as_ptr());
+    }
+}
 
 #[inline]
 pub fn calc(maxlen: Duration, curr: Duration) -> usize {
@@ -8,7 +17,7 @@ pub fn calc(maxlen: Duration, curr: Duration) -> usize {
 }
 
 pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page: usize, local_volume_counter: u8, 
-          version: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize) {
+        _version: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize) {
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
@@ -24,7 +33,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
             window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 0);
             if i == fun_index {
                 // highlight with color pair 3
-                window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL | pancurses::COLOR_PAIR(3), 3);
+                window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 3);
             }
             if song == &songs.current_name {
                 // highlight with a green * at the end or yellow if paused (stophandler)
@@ -45,10 +54,10 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     window.mvchgat(maxy-2, 2, format!("{} ", match songs.shuffle { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match songs.shuffle { true => 1, false => 2 });
     window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
     window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match isloop { true => 1, false => 2 });
-    /* singer info at maxx/2-4 maxy-2 TODO / abandon online plans
-    window.mvaddstr(maxy-2, maxx/2-4, " offline");
-    window.mvchgat(maxy-2, maxx/2-4, " offline".len() as i32, pancurses::A_NORMAL, 2);
-    */
+    let artist_name = songs.get_artist(songs.current_index());
+    window.mvaddstr(maxy-2, maxx/2 - (artist_name.len() as i32)/2, artist_name.as_str());
+    window.mvchgat(maxy-2, maxx/2 - (artist_name.len() as i32)/2, artist_name.len() as i32, pancurses::A_NORMAL, 0);
+
     window.mvaddstr(
         maxy-2,
         maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 2),

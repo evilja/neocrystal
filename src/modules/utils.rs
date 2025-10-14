@@ -1,3 +1,5 @@
+use id3::TagLike;
+
 pub struct Volume {
     pub steps: u8,
     pub step_div: u8,
@@ -20,4 +22,16 @@ impl Volume {
         self.steps as f32 / 100 as f32
     }
 
+}
+
+pub fn artist_data(filepath: &str) -> String {
+    let tag = id3::Tag::read_from_path(filepath);
+    match tag {
+        Ok(t) => {
+            let artist = t.artists().unwrap_or(vec!["Unknown"]).join(", ");
+
+            artist
+        },
+        Err(_) => "Unknown".to_string(),
+    }
 }
