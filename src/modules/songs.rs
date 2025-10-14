@@ -13,7 +13,7 @@ pub struct Songs {
 }
 
 #[inline]
-fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> usize {
+pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> usize {
     index + ((page - 1) * typical_page_size)
 }
 

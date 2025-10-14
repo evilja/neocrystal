@@ -7,7 +7,7 @@ use std::path::Path;
 use mp3_duration;
 use pancurses::{initscr, Input};
 use glob::glob;
-use super::{songs::Songs, presence::rpc_handler, curses::*, utils::Volume};
+use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
@@ -68,9 +68,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         }
                         tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
-                        if fun_index+1 < songs.typical_page_size && (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 { // protection for page size
+                        if fun_index+1 < songs.typical_page_size && absolute_index(fun_index, page, songs.typical_page_size) < songs.songs.len()-1 { // protection for page size
                             fun_index += 1;
-                        } else if (fun_index + ((page-1) * songs.typical_page_size)) < songs.songs.len()-1 {
+                        } else if absolute_index(fun_index, page, songs.typical_page_size) < songs.songs.len()-1 {
                             page += 1;
                             fun_index = 0;
                         }
@@ -121,7 +121,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 },
 
                 Input::Character('b') => { 
-                    songs.blacklist(fun_index + ((page-1) * songs.typical_page_size));
+                    songs.blacklist(absolute_index(fun_index, page, songs.typical_page_size));
                 },
 
                 Input::Character('r') => {
