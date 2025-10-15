@@ -2,8 +2,9 @@ use rand::prelude::*;
 use super::utils::artist_data;
 #[derive(Clone)]
 pub struct Songs {
-    pub cache_songs: Vec<String>,
+    pub ins_s: Vec<String>,
     pub songs: Vec<String>,
+    pub ins_a: Vec<String>,
     pub cache_artist: Vec<String>,
     pub current_song: usize,
     pub current_name: String,
@@ -21,10 +22,12 @@ pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> us
 
 impl Songs {
     pub fn constructor(songs: Vec<String>) -> Self {
+        let x: Vec<String> = songs.iter().map(|s| artist_data(s)).collect();
         Self {
-            cache_songs: songs.clone(),
-            songs: songs.clone(),
-            cache_artist: songs.iter().map(|s| artist_data(s)).collect(),
+            ins_s: songs.clone(),
+            songs,
+            ins_a: x.clone(),
+            cache_artist: x,
             current_song: 0,
             current_name: "Nothing".to_string(),
             typical_page_size: 14,
@@ -34,17 +37,27 @@ impl Songs {
         }
     }
     pub fn get_artist(&self, index: usize) -> String {
-        if index >= self.cache_artist.len() {
-            return "Unknown".to_string();
+        if self.stophandler || index == usize::MAX {
+            return "Nothing".to_string();
         }
-        self.cache_artist[index].clone()
+        return self.ins_a[self.ins_s.iter().position(|x| x == &self.current_name).unwrap()].clone();
     }
     pub fn search(&mut self, pattern: String) {
         if pattern == "false" || pattern.is_empty() {
-            self.songs = self.cache_songs.clone();
+            self.songs = self.ins_s.clone();
+            self.cache_artist = self.ins_a.clone();
             return;
         }
-        self.songs = self.cache_songs.iter().filter(|s| s.to_lowercase().contains(&pattern.to_lowercase())).cloned().collect();
+
+        // search for pattern in ins_s and update songs and cache_artist
+        self.songs.clear();
+        self.cache_artist.clear();
+        for (i, song) in self.ins_s.iter().enumerate() {
+            if song.to_lowercase().contains(&pattern.to_lowercase()) || self.ins_a[i].to_lowercase().contains(&pattern.to_lowercase()) {
+                self.songs.push(song.clone());
+                self.cache_artist.push(self.ins_a[i].clone());
+            }
+        }
     }
 
     pub fn blacklist(&mut self, index: usize) {

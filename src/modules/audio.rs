@@ -65,7 +65,11 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     sink.clear();
 
                     sink.append(source);
-                    sink.try_seek(cachegetpos - Duration::from_secs(5))?;
+                    if cachegetpos <= Duration::from_secs(5) {
+                        sink.try_seek(Duration::from_secs(0))?;
+                    } else {
+                        sink.try_seek(cachegetpos - Duration::from_secs(5))?;
+                    }
                     match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
                         Ok(()) => (),
                         Err(_) => (),
