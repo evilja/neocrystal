@@ -10,8 +10,8 @@ use glob::glob;
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
+    const T: char = 'h';
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
-    let version                     = "v1.2modular".to_string();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
     let mut fun_index               = 0;
@@ -21,14 +21,16 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = false;
+    let mut is_search               = (false, String::from("false"));
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
                                       });
+
     init_curses(&mut window);
     let (maxy, maxx)                = window.get_max_yx();
     loop {
-        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter.steps, version.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
+        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter.steps, is_search.1.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
 
         let key_opt = match comm_rx.try_recv() {
             Ok(_key) => match _key.0 {
@@ -43,6 +45,22 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         };
 
         if let Some(key) = key_opt {
+            if is_search.0 != false {
+                match key {
+                    Input::Character(T) => {
+                        songs.search(is_search.1.clone());
+                        is_search = (false, String::from("false"));
+                        fun_index = 0;
+                        page = 1;
+                        continue;
+                    }
+                    Input::Character(i) => {
+                        is_search.1.push(i);
+                        continue;
+                    },
+                    _ => {}
+                }
+            }
             match key {
                 Input::KeyF13 => { // song ended
                     if !isloop {
@@ -137,7 +155,11 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     
                 },
                 Input::Character('f') => { songs.shuffle(); },
-                Input::Character('h') => { todo!() }, // SEARCH MODE TODO
+                Input::Character(T) => { 
+                    is_search.1.clear();
+                    is_search.0 = true;
+
+                }, // SEARCH MODE TODO
                 Input::Character('g') => { page = 1; fun_index = 0; },
 
                 _ => (),

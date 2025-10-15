@@ -26,10 +26,11 @@ b -> blacklist song (unreachable by both auto next and p button)
 
 r -> resume
 
+h -> search (can't use h in a search) - you can change its keybind to something useless via the const in crystal_manager.rs
 
 TODO
 
-Search songs or playlist, they work similarly in my head so I'll do the one I decide to do at the moment lmao
+idk nothing
 
 I'M AWARE
 

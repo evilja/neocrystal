@@ -18,7 +18,6 @@ fn main() { // establish communications and threads, then give the job to crysta
     let (sigkill, issigkill): (Sender<bool>, Receiver<bool>)                                        = mpsc::channel();
     let mut found_val                                                                               = (false, Instant::now());
     let ret_value: Result<Instant, TryRecvError>                                                    = Err(TryRecvError::Empty);
-
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
             Ok(_) => {

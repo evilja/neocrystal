@@ -2,6 +2,7 @@ use rand::prelude::*;
 use super::utils::artist_data;
 #[derive(Clone)]
 pub struct Songs {
+    pub cache_songs: Vec<String>,
     pub songs: Vec<String>,
     pub cache_artist: Vec<String>,
     pub current_song: usize,
@@ -10,6 +11,7 @@ pub struct Songs {
     pub blacklist: Vec<usize>, 
     pub stophandler: bool,
     pub shuffle: bool,
+    
 }
 
 #[inline]
@@ -20,6 +22,7 @@ pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> us
 impl Songs {
     pub fn constructor(songs: Vec<String>) -> Self {
         Self {
+            cache_songs: songs.clone(),
             songs: songs.clone(),
             cache_artist: songs.iter().map(|s| artist_data(s)).collect(),
             current_song: 0,
@@ -35,6 +38,13 @@ impl Songs {
             return "Unknown".to_string();
         }
         self.cache_artist[index].clone()
+    }
+    pub fn search(&mut self, pattern: String) {
+        if pattern == "false" || pattern.is_empty() {
+            self.songs = self.cache_songs.clone();
+            return;
+        }
+        self.songs = self.cache_songs.iter().filter(|s| s.to_lowercase().contains(&pattern.to_lowercase())).cloned().collect();
     }
 
     pub fn blacklist(&mut self, index: usize) {

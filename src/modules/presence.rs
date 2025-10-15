@@ -39,18 +39,20 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                         .state(&title)
                         .details(x.clone().replace("music/", "").replace("music\\", "").replace(".mp3", ""))
                         .assets(|ass| {
-                            ass.small_image("github")
+                            ass
+                                .small_image("github")
                                 .small_text("github.com/evilja/neo-crystal-plus")
                                 .large_image("default")
                                 .large_text("Crystal+ by Myisha")
                         })
                         .timestamps(|ts| {
-                            ts.start(st_ts)
-                            .end(ed_ts)
+                            ts
+                                .start(st_ts)
+                                .end(ed_ts)
                         })
                     }) {
                         Ok(_) => break,
-                        Err(_) => thread::sleep(Duration::from_secs(1)),
+                        Err(_) => thread::sleep(Duration::from_secs(3)),
                     }
                 }
             }

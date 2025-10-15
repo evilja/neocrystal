@@ -24,6 +24,7 @@ impl Volume {
 
 }
 
+
 pub fn artist_data(filepath: &str) -> String {
     let tag = id3::Tag::read_from_path(filepath);
     match tag {
@@ -35,3 +36,4 @@ pub fn artist_data(filepath: &str) -> String {
         Err(_) => "Unknown".to_string(),
     }
 }
+
