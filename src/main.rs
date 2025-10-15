@@ -47,7 +47,7 @@ fn main() { // establish communications and threads, then give the job to crysta
             },
             Err(_) => (),
         }
-        if found_val.0 != true {
+        if found_val.0 == false {
             match ret_value {
                 Ok(val) => {
                     found_val = (true, val);

@@ -3,8 +3,6 @@ extern crate glob;
 use std::thread;
 use std::time::{Duration};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::path::Path;
-use mp3_duration;
 use pancurses::{initscr, Input};
 use glob::glob;
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
@@ -47,13 +45,17 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         if let Some(key) = key_opt {
             if is_search.0 != false {
                 match key {
-                    Input::Character(T) => {
+                    Input::Character(T) | Input::KeyEnter => {
                         songs.search(is_search.1.clone());
                         is_search = (false, String::from("false"));
                         fun_index = 0;
                         page = 1;
                         continue;
-                    }
+                    },
+                    Input::KeyBackspace | Input::KeyDC => {
+                        is_search.1.pop();
+                        continue;
+                    },
                     Input::Character(i) => {
                         is_search.1.push(i);
                         continue;
@@ -66,10 +68,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     if !isloop {
                         songs.set_by_next().unwrap();
                     }
-                    tx.send(("play_track", songs.current_name())).unwrap();
+                    tx.send(("play_track", songs.current_song_path())).unwrap();
                     reinit_rpc = true;
-                    maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
-                    rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
+                    maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
+                    rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                 },
                 Input::KeyF14 => { //duration sent
                     if reinit_rpc {
@@ -86,9 +88,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         }
                         tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
-                        if fun_index+1 < songs.typical_page_size && absolute_index(fun_index, page, songs.typical_page_size) < songs.songs.len()-1 { // protection for page size
+                        if fun_index+1 < songs.typical_page_size && absolute_index(fun_index, page, songs.typical_page_size) < songs.filtered_songs.len()-1 { // protection for page size
                             fun_index += 1;
-                        } else if absolute_index(fun_index, page, songs.typical_page_size) < songs.songs.len()-1 {
+                        } else if absolute_index(fun_index, page, songs.typical_page_size) < songs.filtered_songs.len()-1 {
                             page += 1;
                             fun_index = 0;
                         }
@@ -113,10 +115,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::Character('p') => {
                     if songs.set_by_pindex(fun_index, page) != Err(0) {
-                        tx.send(("play_track", songs.current_name())).unwrap();
+                        tx.send(("play_track", songs.current_song_path())).unwrap();
                         reinit_rpc = true;
-                        maxlen = mp3_duration::from_path(Path::new(songs.current_name.as_str())).unwrap();
-                        rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
+                        maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
+                        rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                         fcalc = Duration::from_secs(0);
                     }
                 },

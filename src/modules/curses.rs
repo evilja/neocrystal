@@ -21,7 +21,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
-    let page_indicator = format!("Page {}/{}", page, (songs.songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
+    let page_indicator = format!("Page {}/{}", page, (songs.filtered_songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
     window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
     window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_NORMAL, 0);
     if is_search != "false" {
@@ -33,16 +33,16 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     }
     { // song draw
         let start_index = (page-1) * songs.typical_page_size;
-        let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.songs.len());
-        for (i, song) in songs.songs[start_index..end_index].iter().enumerate() {
-            let display_name = song.replace("music/", "").replace("music\\", "").replace(".mp3", "");
+        let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.filtered_songs.len());
+        for (i, song) in songs.filtered_songs[start_index..end_index].iter().enumerate() {
+            let display_name = song.name.replace("music/", "").replace("music\\", "").replace(".mp3", "");
             window.mvaddstr(i as i32 + 1, 2, display_name.as_str());
             window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 0);
             if i == fun_index {
                 // highlight with color pair 3
                 window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 3);
             }
-            if song == &songs.current_name {
+            if song.name == songs.current_name() {
                 // highlight with a green * at the end or yellow if paused (stophandler)
                 window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
                 window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_NORMAL, match songs.stophandler {true => 4, false => 1});
@@ -54,7 +54,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
         }  
     }
     window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
-    window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name.replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
+    window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
     window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
     window.mvaddstr(maxy-3, 2, "Shuffle  Loop                     Rpc      Vol ");
     window.mvaddstr(maxy-2, 2, format!("{} ", match songs.shuffle { true => "true", false => "false" }));

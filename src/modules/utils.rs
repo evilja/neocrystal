@@ -6,7 +6,7 @@ pub struct Volume {
 }
 impl Volume {
     pub fn step_up(&mut self) {
-        if !self.steps >= 100 {
+        if self.steps < 100 {
             self.steps += self.step_div;
         }
     }

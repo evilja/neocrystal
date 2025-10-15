@@ -20,6 +20,9 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     transmitter.send(Instant::now())?; // send a time in the past to indicate paused state
                 },
                 "resume" => {
+                    if cached == "uinit" {
+                        continue;
+                    }
                     sink.play();
                     match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
                         Ok(()) => (),
@@ -52,7 +55,9 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     cached = value;
                 },
                 "forward" => {
-                    sink.try_seek(sink.get_pos()+Duration::from_secs(5))?;
+                    match sink.try_seek(sink.get_pos()+Duration::from_secs(5)) {
+                        _ => (),
+                    }
                     match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
                         Ok(()) => (),
                         Err(_) => (),
@@ -66,7 +71,7 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
 
                     sink.append(source);
                     if cachegetpos <= Duration::from_secs(5) {
-                        sink.try_seek(Duration::from_secs(0))?;
+                        ();
                     } else {
                         sink.try_seek(cachegetpos - Duration::from_secs(5))?;
                     }
