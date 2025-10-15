@@ -60,15 +60,36 @@ impl Songs {
         }
     }
 
-    pub fn blacklist(&mut self, index: usize) {
-        for i in 0..self.blacklist.len() {
-            if self.blacklist[i] == index {
-                self.blacklist.remove(i);
-                return;
-            }
+    pub fn blacklist(&mut self, index_in_songs: usize) {
+    // Convert index from songs[] (filtered) to ins_s[] (original)
+        if index_in_songs >= self.songs.len() {
+            return;
         }
-        self.blacklist.push(index);
+
+        // Find the original index in ins_s
+        if let Some(original_index) = self.ins_s.iter().position(|s| s == &self.songs[index_in_songs]) {
+            if let Some(pos) = self.blacklist.iter().position(|&x| x == original_index) {
+                // If already blacklisted, remove it
+                self.blacklist.remove(pos);
+            } else {
+                // Otherwise add it
+                self.blacklist.push(original_index);
+            }
+            
+        }
     }
+    pub fn is_blacklist(&self, index_in_songs: usize) -> bool {
+        if index_in_songs >= self.songs.len() {
+            return false;
+        }
+
+        if let Some(original_index) = self.ins_s.iter().position(|s| s == &self.songs[index_in_songs]) {
+            self.blacklist.contains(&original_index)
+        } else {
+            false
+        }
+    }
+
     pub fn _all_songs(&self) -> Vec<String> {
         return self.songs.clone();
     }
@@ -88,43 +109,81 @@ impl Songs {
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> { 
         let absolute = absolute_index(index, page, self.typical_page_size);
 
-        if self.blacklist.contains(&absolute) {
-            return Err(0);
+        if absolute >= self.songs.len() {
+            return Err(1);
         }
-        self.current_song = absolute;
-        self.current_name = self.songs[absolute].clone();
-        self.stophandler = false;
-        Ok(())
+
+        // Map to ins_s index
+        if let Some(original_index) = self.ins_s.iter().position(|s| s == &self.songs[absolute]) {
+            if self.blacklist.contains(&original_index) {
+                return Err(0);
+            }
+            self.current_song = absolute;
+            self.current_name = self.songs[absolute].clone();
+            self.stophandler = false;
+            Ok(())
+        } else {
+            Err(1)
+        }
     }
+
     pub fn set_by_next(&mut self) -> Result<usize, ()> {
-        let last_possible_index = self.songs.len() - 1;
+        if self.songs.is_empty() {
+            return Err(()); // nothing to play
+        }
+
+        let last_index = self.songs.len() - 1;
+
+        // 🔀 SHUFFLE MODE
         if self.shuffle {
-            for _ in 0..last_possible_index {
-                match self.set_by_pindex(*(0..last_possible_index).collect::<Vec<usize>>().choose(&mut rand::rng()).unwrap(), 1) {
-                    Ok(_) => return Ok(0),
-                    Err(_) => (),
+            let mut rng = rand::thread_rng();
+            // try as many times as there are songs to find a non-blacklisted one
+            for _ in 0..=last_index {
+                let candidate = (0..=last_index).choose(&mut rng).unwrap();
+                // Map songs index → ins_s index
+                if let Some(original_index) = self.ins_s.iter().position(|s| s == &self.songs[candidate]) {
+                    if !self.blacklist.contains(&original_index) {
+                        self.current_song = candidate;
+                        self.current_name = self.songs[candidate].clone();
+                        self.stophandler = false;
+                        return Ok(candidate);
+                    }
                 }
             }
             return Err(());
         }
-        for i in self.current_song+1..last_possible_index {
-            if !self.blacklist.contains(&i) {
-                self.current_song = i;
-                self.current_name = self.songs[i].clone();
+
+        // ▶️ SEQUENTIAL MODE
+        let mut try_index = self.current_song + 1;
+
+        // First: go forward until end
+        while try_index <= last_index {
+            let original_index = self.ins_s.iter().position(|s| s == &self.songs[try_index]).unwrap();
+            if !self.blacklist.contains(&original_index) {
+                self.current_song = try_index;
+                self.current_name = self.songs[try_index].clone();
                 self.stophandler = false;
-                return Ok(i);
+                return Ok(try_index);
             }
+            try_index += 1;
         }
-        for i in 0..self.current_song {
-            if !self.blacklist.contains(&i) {
-                self.current_song = i;
-                self.current_name = self.songs[i].clone();
+
+        // Then: wrap around from 0 to current_song - 1
+        try_index = 0;
+        while try_index < self.current_song {
+            let original_index = self.ins_s.iter().position(|s| s == &self.songs[try_index]).unwrap();
+            if !self.blacklist.contains(&original_index) {
+                self.current_song = try_index;
+                self.current_name = self.songs[try_index].clone();
                 self.stophandler = false;
-                return Ok(i); 
+                return Ok(try_index);
             }
+            try_index += 1;
         }
+
         Err(())
     }
+
     pub fn stop(&mut self) {
         self.stophandler = true;
     }

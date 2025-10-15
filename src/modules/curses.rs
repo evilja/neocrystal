@@ -47,7 +47,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
                 window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
                 window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_NORMAL, match songs.stophandler {true => 4, false => 1});
 
-            } else if songs.blacklist.contains(&i) {
+            } else if songs.is_blacklist(i) {
                 window.mvaddstr(i as i32 + 1, format!("{} B", display_name).len() as i32, " BL");
                 window.mvchgat(i as i32 + 1, format!("{} B", display_name).len() as i32, 3, pancurses::A_NORMAL, 2);
             }
