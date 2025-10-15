@@ -45,14 +45,15 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         if let Some(key) = key_opt {
             if is_search.0 != false {
                 match key {
-                    Input::Character(T) | Input::KeyEnter => {
+                    
+                    Input::KeyEnter | Input::Character('\n') => {
                         songs.search(is_search.1.clone());
                         is_search = (false, String::from("false"));
                         fun_index = 0;
                         page = 1;
                         continue;
                     },
-                    Input::KeyBackspace | Input::KeyDC => {
+                    Input::KeyBackspace | Input::Character('\x7f') | Input::Character('\x08') => {
                         is_search.1.pop();
                         continue;
                     },
@@ -118,8 +119,13 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         tx.send(("play_track", songs.current_song_path())).unwrap();
                         reinit_rpc = true;
                         maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
-                        rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
-                        fcalc = Duration::from_secs(0);
+                        for _i in 0..=1 {
+                            match rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)) {
+                                Ok(()) => break,
+                                Err(_) => thread::sleep(Duration::from_millis(100)),
+                            }
+                            fcalc = Duration::from_secs(0);
+                        }
                     }
                 },
 

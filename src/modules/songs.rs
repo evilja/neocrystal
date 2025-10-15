@@ -40,7 +40,6 @@ impl Songs {
                 .replace(".mp3", "");
             let searchable = format!("{} {}", name.to_lowercase(), artist.to_lowercase());
             let duration = mp3_duration::from_path(Path::new(path))
-                .map(|d| d)
                 .unwrap_or(Duration::from_secs(0));
 
             all_songs.push(Song {
@@ -56,7 +55,7 @@ impl Songs {
         Self {
             filtered_songs: all_songs.clone(),
             all_songs,
-            current_index: 0,
+            current_index: usize::MAX,
             stophandler: true,
             shuffle: false,
             typical_page_size: 14,
@@ -127,11 +126,7 @@ impl Songs {
     }
 
     pub fn current_name(&self) -> String {
-        if self.stophandler {
-            return "Nothing".to_string();
-        }
-        self.filtered_songs.get(self.current_index).map(|s| s.name.clone()).unwrap_or_default()
-        
+        self.filtered_songs.get(self.current_index).map(|s| s.name.clone()).unwrap_or("Nothing".to_string())
     }
 
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> {
