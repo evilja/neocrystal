@@ -37,3 +37,9 @@ pub fn artist_data(filepath: &str) -> String {
     }
 }
 
+pub fn change_artist(filepath: &str, new_artist: &str) -> Result<(), String> {
+    let mut tag = id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    tag.set_artist(new_artist);
+    tag.write_to_path(filepath, id3::Version::Id3v24).map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
+    Ok(())
+}

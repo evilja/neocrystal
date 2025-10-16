@@ -1,5 +1,5 @@
 use rand::prelude::*;
-use super::utils::artist_data;
+use super::utils::{artist_data, change_artist};
 use mp3_duration;
 use std::time::Duration;
 use std::path::Path;
@@ -70,12 +70,34 @@ impl Songs {
         self.filtered_songs.get(self.current_index).map(|s| s.path.clone()).unwrap_or_default()
     }
 
+    pub fn match_c(&self) -> usize {
+        for i in 0..self.filtered_songs.len() {
+            if self.filtered_songs[i].original_index == self.current_index {
+                return i;
+            }
+        }
+        usize::MAX
+    }
+
 
     pub fn get_artist(&self, index: usize) -> String {
         if self.stophandler || index >= self.filtered_songs.len() {
             return "Nothing".to_string();
         }
         self.filtered_songs[index].artist.clone()
+    }
+
+    pub fn set_artist(&mut self, index: usize, artist: String) {
+        if self.stophandler || index >= self.filtered_songs.len() {
+            return;
+        }
+        match change_artist(&self.filtered_songs[index].path, &artist) {
+            Ok(_) => {
+                self.all_songs[self.filtered_songs[index].original_index].artist = artist.clone();
+                self.filtered_songs[index].artist = artist.clone();
+            },
+            Err(_) => {}
+        }
     }
 
     pub fn search(&mut self, pattern: String) {

@@ -13,7 +13,7 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
     let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
     let mut cached: String              = "uinit".to_string();
     loop {
-        if let Ok((command, value)) = receiver.recv_timeout(Duration::from_millis(100)) {
+        if let Ok((command, value)) = receiver.recv() {
             match command {
                 "pause" => {
                     sink.pause();

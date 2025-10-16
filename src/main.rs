@@ -10,7 +10,7 @@ use crate::modules::{audio::play_audio, crystal_manager::crystal_manager};
 
 
 fn main() { // establish communications and threads, then give the job to crystal_manager fn
-    init_locale();
+    unsafe { init_locale(); }
 
     let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>)                = mpsc::channel();
     let (tx_proc, rx_proc): (Sender<Instant>, Receiver<Instant>)                                    = mpsc::channel();

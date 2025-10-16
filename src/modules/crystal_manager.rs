@@ -7,8 +7,23 @@ use pancurses::{initscr, Input};
 use glob::glob;
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
 
+const UP:           char= 'u';
+const DOWN:         char= 'j';
+const LEFT:         char= 'n';
+const RIGHT:        char= 'm';
+const SHUFFLE:      char= 'f';
+const PLAY:         char= 'p';
+const BLACKLIST:    char= 'b';
+const STOP:         char= 's';
+const RESUME:       char= 'r';
+const LOOP:         char= 'l';
+const SPECIAL:      char= 'o';
+const QUIT:         char= 'q';
+const SEARCH:       char= 'h';
+const TOP:          char= 'g';
+const CHANGE:       char= 'c';
+
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
-    const T: char = 'h';
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
     let mut page                    = 1;
     let mut fcalc: Duration         = Duration::from_secs(0);
@@ -19,7 +34,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = false;
-    let mut is_search               = (false, String::from("false"));
+    let mut is_search               = (0, String::from("false"));
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
@@ -43,14 +58,20 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         };
 
         if let Some(key) = key_opt {
-            if is_search.0 != false {
+            if is_search.0 != 0 {
                 match key {
                     
                     Input::KeyEnter | Input::Character('\n') => {
-                        songs.search(is_search.1.clone());
-                        is_search = (false, String::from("false"));
-                        fun_index = 0;
-                        page = 1;
+                        match is_search.0 {
+                            1 => {
+                                songs.search(is_search.1.clone());
+                                fun_index = 0;
+                                page = 1;
+                            },
+                            2 => {songs.set_artist(songs.match_c(), is_search.1.clone());},
+                            _ => {}
+                        }
+                        is_search = (0, String::from("false"));
                         continue;
                     },
                     Input::KeyBackspace | Input::Character('\x7f') | Input::Character('\x08') => {
@@ -80,9 +101,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                 }
 
-                Input::Character('q') => break,
+                Input::Character(QUIT) => break,
 
-                Input::KeyDown | Input::Character('j') => {
+                Input::KeyDown | Input::Character(DOWN) => {
                     if specialinteraction {
                         if local_volume_counter.as_f64() > 0.0 {
                             local_volume_counter.step_down();
@@ -98,7 +119,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                 },
 
-                Input::KeyUp | Input::Character('u') => {
+                Input::KeyUp | Input::Character(UP) => {
                     if specialinteraction {
                         if local_volume_counter.as_f64() < 1.0 {
                             local_volume_counter.step_up();
@@ -114,7 +135,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                 },
 
-                Input::Character('p') => {
+                Input::Character(PLAY) => {
                     if songs.set_by_pindex(fun_index, page) != Err(0) {
                         tx.send(("play_track", songs.current_song_path())).unwrap();
                         reinit_rpc = true;
@@ -129,7 +150,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                 },
 
-                Input::Character('o') => {
+                Input::Character(SPECIAL) => {
                     if specialinteraction {
                         specialinteraction = false;
                     } else {
@@ -137,38 +158,42 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                 },
 
-                Input::Character('l') => {
+                Input::Character(LOOP) => {
                     isloop = !isloop;
                 },
 
-                Input::Character('s') => {
+                Input::Character(STOP) => {
                     songs.stop();
                     tx.send(("pause", String::new())).unwrap();
                 },
 
-                Input::Character('b') => { 
+                Input::Character(BLACKLIST) => {
                     songs.blacklist(absolute_index(fun_index, page, songs.typical_page_size));
                 },
 
-                Input::Character('r') => {
+                Input::Character(RESUME) => {
                     songs.stophandler = false;
                     tx.send(("resume", String::new())).unwrap();
                 },
-                Input::KeyRight => {
+                Input::KeyRight | Input::Character(RIGHT) => {
                     tx.send(("forward", String::new())).unwrap();
 
                 }
-                Input::KeyLeft => {
+                Input::KeyLeft | Input::Character(LEFT) => {
                     tx.send(("back", String::new())).unwrap();
                     
                 },
-                Input::Character('f') => { songs.shuffle(); },
-                Input::Character(T) => { 
+                Input::Character(SHUFFLE) => { songs.shuffle(); },
+                Input::Character(SEARCH) => {
                     is_search.1.clear();
-                    is_search.0 = true;
-
+                    is_search.0 = 1;
                 }, // SEARCH MODE TODO
-                Input::Character('g') => { page = 1; fun_index = 0; },
+                Input::Character(TOP) => { page = 1; fun_index = 0; },
+                Input::Character(CHANGE) => {
+                    is_search.1.clear();
+                    is_search.0 = 2;
+
+                }
 
                 _ => (),
             }

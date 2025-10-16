@@ -1,13 +1,12 @@
 use pancurses::Window;
 use std::time::Duration;
 use super::songs::Songs;
-use libc;
 use std::ffi::CString;
-
-pub fn init_locale() {
+use libc::{setlocale, LC_ALL};
+pub unsafe fn init_locale() {
     unsafe {
         let locale = CString::new("").unwrap();
-        libc::setlocale(libc::LC_ALL, locale.as_ptr());
+        setlocale(LC_ALL, locale.as_ptr());
     }
 }
 
@@ -21,35 +20,37 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
-    let page_indicator = format!("Page {}/{}", page, (songs.filtered_songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
-    window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
-    window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_NORMAL, 0);
+    {
+        let page_indicator = format!("Page {}/{}", page, (songs.filtered_songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize);
+        window.mvaddstr(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.as_str());
+        window.mvchgat(0, maxx - (page_indicator.len() as i32 + 2), page_indicator.len() as i32, pancurses::A_NORMAL, 0);
+    }
     if is_search != "false" {
-        window.mvaddstr(0, 2, format!("Search: {}", is_search).as_str());
-        window.mvchgat(0, 2, format!("Search: {}", is_search).len() as i32, pancurses::A_NORMAL, 9);
+        window.mvaddstr(0, 2, format!("Input: {}", is_search).as_str());
+        window.mvchgat(0, 2, format!("Input: {}", is_search).chars().count() as i32, pancurses::A_NORMAL, 9);
     } else {
-        window.mvaddstr(0, 2, "Press 'h' to search");
-        window.mvchgat(0, 2, "Press 'h' to search".len() as i32, pancurses::A_NORMAL, 9);
+        window.mvaddstr(0, 2, "Search or edit");
+        window.mvchgat(0, 2, "Search or edit".len() as i32, pancurses::A_NORMAL, 9);
     }
     { // song draw
         let start_index = (page-1) * songs.typical_page_size;
         let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.filtered_songs.len());
         for (i, song) in songs.filtered_songs[start_index..end_index].iter().enumerate() {
-            let display_name = song.name.replace("music/", "").replace("music\\", "").replace(".mp3", "");
+            let display_name = &song.name;
             window.mvaddstr(i as i32 + 1, 2, display_name.as_str());
-            window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 0);
+            window.mvchgat(i as i32 + 1, 2, display_name.chars().count() as i32, pancurses::A_NORMAL, 0);
             if i == fun_index {
                 // highlight with color pair 3
-                window.mvchgat(i as i32 + 1, 2, display_name.len() as i32, pancurses::A_NORMAL, 3);
+                window.mvchgat(i as i32 + 1, 2, display_name.chars().count() as i32, pancurses::A_NORMAL, 3);
             }
             if song.name == songs.current_name() {
                 // highlight with a green * at the end or yellow if paused (stophandler)
-                window.mvaddstr(i as i32 + 1, format!("{} *", display_name).len() as i32, " *");
-                window.mvchgat(i as i32 + 1, format!("{} *", display_name).len() as i32, 2, pancurses::A_NORMAL, match songs.stophandler {true => 4, false => 1});
+                window.mvaddstr(i as i32 + 1, format!("{} *", display_name).chars().count() as i32, " *");
+                window.mvchgat(i as i32 + 1, format!("{} *", display_name).chars().count() as i32, 2, pancurses::A_NORMAL, match songs.stophandler {true => 4, false => 1});
 
             } else if songs.is_blacklist(i) {
-                window.mvaddstr(i as i32 + 1, format!("{} B", display_name).len() as i32, " BL");
-                window.mvchgat(i as i32 + 1, format!("{} B", display_name).len() as i32, 3, pancurses::A_NORMAL, 2);
+                window.mvaddstr(i as i32 + 1, format!("{} B", display_name).chars().count() as i32, " BL");
+                window.mvchgat(i as i32 + 1, format!("{} B", display_name).chars().count() as i32, 3, pancurses::A_NORMAL, 2);
             }
         }  
     }
@@ -61,10 +62,11 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     window.mvchgat(maxy-2, 2, format!("{} ", match songs.shuffle { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match songs.shuffle { true => 1, false => 2 });
     window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
     window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match isloop { true => 1, false => 2 });
-    let artist_name = songs.get_artist(songs.current_index());
-    window.mvaddstr(maxy-2, maxx/2 - (artist_name.len() as i32)/2, artist_name.as_str());
-    window.mvchgat(maxy-2, maxx/2 - (artist_name.len() as i32)/2, artist_name.len() as i32, pancurses::A_NORMAL, 0);
-
+    {
+        let artist_name = songs.get_artist(songs.current_index());
+        window.mvaddstr(maxy-2, maxx/2 - (artist_name.chars().count() as i32)/2, artist_name.as_str());
+        window.mvchgat(maxy-2, maxx/2 - (artist_name.chars().count() as i32)/2, artist_name.chars().count() as i32, pancurses::A_NORMAL, 0);
+    }
     window.mvaddstr(
         maxy-2,
         maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 1),
