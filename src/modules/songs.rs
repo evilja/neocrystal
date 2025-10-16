@@ -40,7 +40,7 @@ impl Songs {
                 .replace("music\\", "")
                 .replace(".mp3", "");
             let searchable = format!("{} {}", name.to_lowercase(), artist.to_lowercase());
-            let duration = mp3_duration::from_path(Path::new(path))
+            let duration = mp3_duration::from_path(Path::new(path)) // optimization can be done here because loading the constructor can get slow with many songs
                 .unwrap_or(Duration::from_secs(0));
 
             all_songs.push(Song {
@@ -75,20 +75,20 @@ impl Songs {
             return "Nothing".to_string();
         }
 
-        for song in &self.all_songs {
+        for song in &self.all_songs { // search is now useless ig because current_index works properly, i'll leave it for now
             if song.current {
                 return song.path.clone();
             }
         }
         "Nothing".to_string()
     }
-    pub fn get_original_index(&self, index_in_filtered: usize) -> usize {
+    pub fn get_original_index(&self, index_in_filtered: usize) -> usize { // im not sure these work xd
         if index_in_filtered >= self.filtered_songs.len() {
             return usize::MAX;
         }
         self.filtered_songs[index_in_filtered].original_index
     }
-    pub fn get_filtered_index(&self, original_index: usize) -> usize {
+    pub fn get_filtered_index(&self, original_index: usize) -> usize { // im not sure these work xd
         if original_index == usize::MAX {
             return usize::MAX;
         }
@@ -99,7 +99,7 @@ impl Songs {
         }
         usize::MAX
     }
-    pub fn match_c(&self) -> usize {
+    pub fn match_c(&self) -> usize { // wtf does that even do? idk but i wrote it and it works
         for i in 0..self.filtered_songs.len() {
             if self.filtered_songs[i].original_index == self.current_index {
                 return i;
@@ -235,7 +235,7 @@ impl Songs {
             return Err(0);
         }
         self.renew_current_status(original_index);
-        self.current_index = absolute;
+        self.current_index = original_index;
         self.stophandler = false;
         Ok(())
     }
@@ -254,7 +254,7 @@ impl Songs {
                 let candidate = (0..=last_index).choose(&mut rng).unwrap();
                 let original_index = self.filtered_songs[candidate].original_index;
                 if !self.blacklist.contains(&original_index) {
-                    self.current_index = candidate;
+                    self.current_index = original_index;
                     self.stophandler = false;
                     self.renew_current_status(original_index);
                     return Ok(candidate);
@@ -264,11 +264,11 @@ impl Songs {
         }
 
         // ▶️ SEQUENTIAL MODE
-        let mut try_index = self.current_index + 1;
+        let mut try_index = self.get_filtered_index(self.current_index) + 1;
         while try_index <= last_index {
             let original_index = self.filtered_songs[try_index].original_index;
             if !self.blacklist.contains(&original_index) {
-                self.current_index = try_index;
+                self.current_index = original_index;
                 self.stophandler = false;
                 self.renew_current_status(original_index);
                 return Ok(try_index);
@@ -277,10 +277,10 @@ impl Songs {
         }
 
         try_index = 0;
-        while try_index < self.current_index {
+        while try_index < self.get_filtered_index(self.current_index) {
             let original_index = self.filtered_songs[try_index].original_index;
             if !self.blacklist.contains(&original_index) {
-                self.current_index = try_index;
+                self.current_index = original_index;
                 self.stophandler = false;
                 self.renew_current_status(original_index);
                 return Ok(try_index);

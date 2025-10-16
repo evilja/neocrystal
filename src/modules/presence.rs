@@ -32,7 +32,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                 ed_ts = st_ts + y;
                 println!("st_ts is {}, ed_ts is {}", st_ts, ed_ts);
                 
-                loop {
+                for _ in 0..=5 {
                     match drpc.set_activity(|act| {
                     act
                         .activity_type(ActivityType::Listening)

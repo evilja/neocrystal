@@ -38,31 +38,21 @@ fn main() { // establish communications and threads, then give the job to crysta
             },
             Err(_) => (),
         }
-        match rx_proc.try_recv() {
+        match rx_proc.recv_timeout(Duration::from_millis(100)) {
             Ok(val) => {
                 found_val = (true, val);
-                if val <= Instant::now() {
-                    found_val = (false, Instant::now());
-                }
             },
             Err(_) => (),
         }
-        if found_val.0 == false {
-            match ret_value {
-                Ok(val) => {
-                    found_val = (true, val);
-                },
-                Err(_) => (),
-            }
-        } else {
-            if Instant::now() >= found_val.1 {
-                comm_tx.send(("turn", Instant::now() - Instant::now())).unwrap();
+        if found_val.0 {
+            println!("{} {:?}", found_val.1 - Instant::now() <= Duration::ZERO, found_val.1 - Instant::now());
+            if found_val.1 - Instant::now() <= Duration::ZERO {
+                comm_tx.send(("turn", Duration::ZERO)).unwrap();
                 found_val = (false, Instant::now());
+                continue;
             }
             comm_tx.send(("duration", found_val.1 - Instant::now())).unwrap();
         }
-        
-        thread::sleep(Duration::from_millis(100));
     });
 
     if crystal_manager(tx, comm_rx) {

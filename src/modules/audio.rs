@@ -12,8 +12,9 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
     let stream_handle: OutputStream     = rodio::OutputStreamBuilder::open_default_stream().expect("open default audio stream");
     let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
     let mut cached: String              = "uinit".to_string();
+    let mut cached_duration: Duration   = Duration::from_secs(0);
     loop {
-        if let Ok((command, value)) = receiver.recv() {
+        if let Ok((command, value)) = receiver.recv_timeout(Duration::from_secs(1)) {
             match command {
                 "pause" => {
                     sink.pause();
@@ -24,7 +25,7 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                         continue;
                     }
                     sink.play();
-                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
+                    match transmitter.send(Instant::now() + cached_duration - sink.get_pos()) {
                         Ok(()) => (),
                         Err(_) => (),
                     }
@@ -46,7 +47,8 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     sink.clear();
 
                     sink.append(source);
-                    let when_ends: Instant = Instant::now() + mp3_duration::from_path(Path::new(value.as_str()))? + Duration::from_secs(2);
+                    cached_duration = mp3_duration::from_path(Path::new(value.as_str()))?;
+                    let when_ends: Instant = Instant::now() + cached_duration;
                     match transmitter.send(when_ends) {
                         Ok(()) => (),
                         Err(_) => (),
@@ -55,12 +57,13 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     cached = value;
                 },
                 "forward" => {
-                    match sink.try_seek(sink.get_pos()+Duration::from_secs(5)) {
-                        _ => (),
-                    }
-                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
-                        Ok(()) => (),
-                        Err(_) => (),
+                    if sink.get_pos() + Duration::from_secs(5) >= cached_duration {
+                        // If the new position is beyond the end of the track, seek to the end
+                        let _ = sink.try_seek(cached_duration - Duration::from_secs(1));
+                    } else {
+                        match sink.try_seek(sink.get_pos()+Duration::from_secs(5)) {
+                            _ => (),
+                        }
                     }
                 },
                 "back" =>{
@@ -75,14 +78,17 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     } else {
                         sink.try_seek(cachegetpos - Duration::from_secs(5))?;
                     }
-                    match transmitter.send(Instant::now() + mp3_duration::from_path(Path::new(cached.as_str())).unwrap() + Duration::from_secs(2) - sink.get_pos()) {
-                        Ok(()) => (),
-                        Err(_) => (),
-                    }
                     sink.play();
                 },
-                _ => return Err("Unknown command".into()),
+                _ => {}
             }
+        }
+        if cached == "uinit".to_string() || sink.is_paused() {
+            continue;
+        }
+        match transmitter.send(Instant::now() + cached_duration - sink.get_pos()) {
+            Ok(()) => (),
+            Err(_) => (),
         }
     }
     Ok("Stopped".to_string())
