@@ -111,7 +111,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     tx.send(("play_track", sp)).unwrap();
                     reinit_rpc = true;
                     maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
-                    rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
+                    rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                 },
                 Input::KeyF14 => { //duration sent
                     if reinit_rpc {

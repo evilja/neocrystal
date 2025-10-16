@@ -66,7 +66,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
     window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
     window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match isloop { true => 1, false => 2 });
     {
-        let artist_name = songs.get_artist(songs.current_index());
+        let artist_name = songs.get_artist_search();
         window.mvaddstr(maxy-2, maxx/2 - (artist_name.chars().count() as i32)/2, artist_name.as_str());
         window.mvchgat(maxy-2, maxx/2 - (artist_name.chars().count() as i32)/2, artist_name.chars().count() as i32, pancurses::A_NORMAL, 0);
     }

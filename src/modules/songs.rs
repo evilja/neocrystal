@@ -110,10 +110,21 @@ impl Songs {
 
 
     pub fn get_artist(&self, index: usize) -> String {
-        if self.stophandler || index >= self.filtered_songs.len() {
+        if self.stophandler {
             return "Nothing".to_string();
         }
-        self.filtered_songs[index].artist.clone()
+        self.all_songs.get(index).map(|s| s.artist.clone()).unwrap_or("Nothing".to_string())
+    }
+    pub fn get_artist_search(&self) -> String {
+        if self.stophandler {
+            return "Nothing".to_string();
+        }
+        for song in &self.all_songs {
+            if song.current {
+                return song.artist.clone();
+            }
+        }
+        "Nothing".to_string()
     }
 
     pub fn set_force(&mut self, original_index: usize) {
@@ -203,6 +214,13 @@ impl Songs {
             song.current = false;
         }
         if let Some(song) = self.all_songs.get_mut(original_index) {
+            song.current = true;
+        }
+        let filtered_index = self.get_filtered_index(original_index);
+        for song in &mut self.filtered_songs {
+            song.current = false;
+        }
+        if let Some(song) = self.filtered_songs.get_mut(filtered_index) {
             song.current = true;
         }
     }
