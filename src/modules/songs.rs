@@ -12,6 +12,7 @@ pub struct Song {
     pub searchable: String,
     pub original_index: usize,
     pub duration: Duration,
+    pub current: bool,
 }
 
 pub struct Songs {
@@ -49,6 +50,7 @@ impl Songs {
                 searchable,
                 original_index: i,
                 duration,
+                current: false,
             });
         }
 
@@ -73,10 +75,12 @@ impl Songs {
             return "Nothing".to_string();
         }
 
-        match self.filtered_songs.get(self.current_index).map(|s| s.path.clone()) {
-            Some(p) => p,
-            None => "Nothing".to_string(),
+        for song in &self.all_songs {
+            if song.current {
+                return song.path.clone();
+            }
         }
+        "Nothing".to_string()
     }
     pub fn get_original_index(&self, index_in_filtered: usize) -> usize {
         if index_in_filtered >= self.filtered_songs.len() {
@@ -118,6 +122,7 @@ impl Songs {
         }
         self.current_index = original_index;
         self.stophandler = false;
+        self.renew_current_status(original_index);
     }
 
     pub fn set_artist(&mut self, index: usize, artist: String) {
@@ -181,9 +186,26 @@ impl Songs {
     }
 
     pub fn current_name(&self) -> String {
-        self.filtered_songs.get(self.current_index).map(|s| s.name.clone()).unwrap_or("Nothing".to_string())
+        if self.stophandler {
+            return "Nothing".to_string();
+        }
+
+        for song in &self.all_songs {
+            if song.current {
+                return song.name.clone();
+            }
+        }
+        "Nothing".to_string()
     }
 
+    pub fn renew_current_status(&mut self, original_index: usize) {
+        for song in &mut self.all_songs {
+            song.current = false;
+        }
+        if let Some(song) = self.all_songs.get_mut(original_index) {
+            song.current = true;
+        }
+    }
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> {
         let absolute = absolute_index(index, page, self.typical_page_size);
         if absolute >= self.filtered_songs.len() {
@@ -194,7 +216,7 @@ impl Songs {
         if self.blacklist.contains(&original_index) {
             return Err(0);
         }
-
+        self.renew_current_status(original_index);
         self.current_index = absolute;
         self.stophandler = false;
         Ok(())
@@ -216,6 +238,7 @@ impl Songs {
                 if !self.blacklist.contains(&original_index) {
                     self.current_index = candidate;
                     self.stophandler = false;
+                    self.renew_current_status(original_index);
                     return Ok(candidate);
                 }
             }
@@ -229,6 +252,7 @@ impl Songs {
             if !self.blacklist.contains(&original_index) {
                 self.current_index = try_index;
                 self.stophandler = false;
+                self.renew_current_status(original_index);
                 return Ok(try_index);
             }
             try_index += 1;
@@ -240,6 +264,7 @@ impl Songs {
             if !self.blacklist.contains(&original_index) {
                 self.current_index = try_index;
                 self.stophandler = false;
+                self.renew_current_status(original_index);
                 return Ok(try_index);
             }
             try_index += 1;
