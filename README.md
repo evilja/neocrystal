@@ -2,7 +2,7 @@ This application is written in Rustlang.
 
 You can compile it with "cargo build" (rust compiler)
 
-Current keybindings:
+Current keybindings: you can change all keybinds to something useless using the consts in crystal_manager.rs
 
 U or KEY_UP -> go up OR volume up (special interaction mode)
 
@@ -26,7 +26,9 @@ b -> blacklist song (unreachable by both auto next and p button)
 
 r -> resume
 
-h -> search - you can change its keybind to something useless via the const in crystal_manager.rs
+h -> search 
+
+c -> change artist name (edit metadata)
 
 TODO
 
