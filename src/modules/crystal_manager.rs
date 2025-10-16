@@ -5,8 +5,10 @@ use std::time::{Duration};
 use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
-use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
+use crate::modules::songs::Song;
 
+use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
+const BLANK:        char= ' ';
 const UP:           char= 'u';
 const DOWN:         char= 'j';
 const LEFT:         char= 'n';
@@ -22,6 +24,7 @@ const QUIT:         char= 'q';
 const SEARCH:       char= 'h';
 const TOP:          char= 'g';
 const CHANGE:       char= 'c';
+const SETNEXT:      char= 'e';
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
@@ -34,6 +37,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = false;
+    let mut setnext                 = usize::MAX;
     let mut is_search               = (0, String::from("false"));
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
@@ -43,7 +47,11 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     init_curses(&mut window);
     let (maxy, maxx)                = window.get_max_yx();
     loop {
-        redraw(&mut window, maxx, maxy, &mut songs, page, local_volume_counter.steps, is_search.1.clone(), isloop, reinit_rpc, maxlen, fcalc, fun_index);
+        redraw(&mut window, maxx, maxy, &mut songs, page, 
+            local_volume_counter.steps, is_search.1.clone(), 
+            isloop, reinit_rpc, maxlen, fcalc, fun_index,
+            setnext
+        );
 
         let key_opt = match comm_rx.try_recv() {
             Ok(_key) => match _key.0 {
@@ -87,13 +95,23 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
             }
             match key {
                 Input::KeyF13 => { // song ended
-                    if !isloop {
+                    let mut sp: String = "N/A".to_string();
+                    if setnext != usize::MAX {
+                        songs.set_force(setnext);
+                        sp = songs.original_song_path(setnext);
+                        setnext = usize::MAX;
+                    } else if !isloop {
                         songs.set_by_next().unwrap();
                     }
-                    tx.send(("play_track", songs.current_song_path())).unwrap();
+                    match sp.as_str() {
+                        "N/A" => sp = songs.current_song_path(),
+                        _ => (),
+                    }
+
+                    tx.send(("play_track", sp)).unwrap();
                     reinit_rpc = true;
                     maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
-                    rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
+                    rpctx.send((songs.current_name().to_string(), maxlen.as_secs_f32() as u64)).unwrap();
                 },
                 Input::KeyF14 => { //duration sent
                     if reinit_rpc {
@@ -193,7 +211,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     is_search.1.clear();
                     is_search.0 = 2;
 
-                }
+                },
+                Input::Character(SETNEXT) => {
+                    setnext = songs.get_original_index(absolute_index(fun_index, page, songs.typical_page_size));
+                },
 
                 _ => (),
             }

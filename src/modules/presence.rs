@@ -37,7 +37,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     act
                         .activity_type(ActivityType::Listening)
                         .state(&title)
-                        .details(x.clone().replace("music/", "").replace("music\\", "").replace(".mp3", ""))
+                        .details(x.clone())
                         .assets(|ass| {
                             ass
                                 .small_image("github")

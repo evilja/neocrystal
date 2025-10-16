@@ -62,14 +62,39 @@ impl Songs {
             blacklist: Vec::new(),
         }
     }
-
+    pub fn original_song_path(&self, original_index: usize) -> String {
+        if self.stophandler {
+            return "Nothing".to_string();
+        }
+        self.all_songs.get(original_index).map(|s| s.path.clone()).unwrap_or_default()
+    }
     pub fn current_song_path(&self) -> String {
         if self.stophandler {
             return "Nothing".to_string();
         }
-        self.filtered_songs.get(self.current_index).map(|s| s.path.clone()).unwrap_or_default()
-    }
 
+        match self.filtered_songs.get(self.current_index).map(|s| s.path.clone()) {
+            Some(p) => p,
+            None => "Nothing".to_string(),
+        }
+    }
+    pub fn get_original_index(&self, index_in_filtered: usize) -> usize {
+        if index_in_filtered >= self.filtered_songs.len() {
+            return usize::MAX;
+        }
+        self.filtered_songs[index_in_filtered].original_index
+    }
+    pub fn get_filtered_index(&self, original_index: usize) -> usize {
+        if original_index == usize::MAX {
+            return usize::MAX;
+        }
+        for (i, song) in self.filtered_songs.iter().enumerate() {
+            if song.original_index == original_index {
+                return i;
+            }
+        }
+        usize::MAX
+    }
     pub fn match_c(&self) -> usize {
         for i in 0..self.filtered_songs.len() {
             if self.filtered_songs[i].original_index == self.current_index {
@@ -85,6 +110,14 @@ impl Songs {
             return "Nothing".to_string();
         }
         self.filtered_songs[index].artist.clone()
+    }
+
+    pub fn set_force(&mut self, original_index: usize) {
+        if original_index >= self.all_songs.len() {
+            return;
+        }
+        self.current_index = original_index;
+        self.stophandler = false;
     }
 
     pub fn set_artist(&mut self, index: usize, artist: String) {
