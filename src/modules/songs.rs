@@ -109,7 +109,7 @@ impl Songs {
     }
 
 
-    pub fn get_artist(&self, index: usize) -> String {
+    pub fn _get_artist(&self, index: usize) -> String {
         if self.stophandler {
             return "Nothing".to_string();
         }
@@ -188,7 +188,7 @@ impl Songs {
         self.filtered_songs.iter().map(|s| s.path.clone()).collect()
     }
 
-    pub fn current_index(&self) -> usize {
+    pub fn _current_index(&self) -> usize {
         if self.stophandler {
             usize::MAX
         } else {

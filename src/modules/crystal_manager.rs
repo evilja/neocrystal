@@ -5,10 +5,8 @@ use std::time::{Duration};
 use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
-use crate::modules::songs::Song;
 
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
-const BLANK:        char= ' ';
 const UP:           char= 'u';
 const DOWN:         char= 'j';
 const LEFT:         char= 'n';
@@ -48,14 +46,11 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     init_curses(&mut window);
     let (maxy, maxx)                = window.get_max_yx();
     loop {
-        match suspend_redraw {
-            false => { redraw(&mut window, maxx, maxy, &mut songs, page,
+        redraw(&mut window, maxx, maxy, &mut songs, page,
                 local_volume_counter.steps, is_search.1.clone(),
                 isloop, reinit_rpc, maxlen, fcalc, fun_index,
                 setnext
-            ); }
-            true => suspend_redraw = false,
-        }
+            );
 
 
         let key_opt = match comm_rx.try_recv() {
@@ -246,6 +241,6 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         
 
     }
-    rpctx.send(("stop".to_string(), 0)).unwrap();
+    match rpctx.send(("stop".to_string(), 0)) { _ => () }
     true
 }

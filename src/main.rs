@@ -17,7 +17,6 @@ fn main() { // establish communications and threads, then give the job to crysta
     let (comm_tx, comm_rx): (Sender<(&'static str, Duration)>, Receiver<(&'static str, Duration)>)  = mpsc::channel();
     let (sigkill, issigkill): (Sender<bool>, Receiver<bool>)                                        = mpsc::channel();
     let mut found_val                                                                               = (false, Instant::now());
-    let ret_value: Result<Instant, TryRecvError>                                                    = Err(TryRecvError::Empty);
     thread::spawn(move || {
         match play_audio(rx, tx_proc) {
             Ok(_) => {
@@ -45,13 +44,12 @@ fn main() { // establish communications and threads, then give the job to crysta
             Err(_) => (),
         }
         if found_val.0 {
-            println!("{} {:?}", found_val.1 - Instant::now() <= Duration::ZERO, found_val.1 - Instant::now());
             if found_val.1 - Instant::now() <= Duration::ZERO {
                 comm_tx.send(("turn", Duration::ZERO)).unwrap();
                 found_val = (false, Instant::now());
                 continue;
             }
-            comm_tx.send(("duration", found_val.1 - Instant::now())).unwrap();
+            match comm_tx.send(("duration", found_val.1 - Instant::now())) { _ => () }
         }
     });
 
