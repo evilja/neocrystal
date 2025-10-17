@@ -6,6 +6,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
 
+use crate::modules::songs;
+
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
 const UP:           char= 'u';
 const DOWN:         char= 'j';
@@ -95,6 +97,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
             }
             match key {
                 Input::KeyF13 => { // song ended
+                    if songs.stophandler {
+                        continue;
+                    }
                     println!("Song ended rpc received");
                     let mut sp: String = "N/A".to_string();
                     if setnext != usize::MAX {
@@ -102,7 +107,12 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         sp = songs.original_song_path(setnext);
                         setnext = usize::MAX;
                     } else if !isloop {
-                        songs.set_by_next().unwrap();
+                        match songs.set_by_next() {
+                            Ok(_) => (),
+                            Err(_) => {
+                                continue;
+                            }
+                        }
                     }
                     match sp.as_str() {
                         "N/A" => sp = songs.current_song_path(),

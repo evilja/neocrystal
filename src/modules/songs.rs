@@ -241,7 +241,7 @@ impl Songs {
     }
 
     pub fn set_by_next(&mut self) -> Result<usize, ()> {
-        if self.filtered_songs.is_empty() {
+        if self.filtered_songs.is_empty() || self.stophandler {
             return Err(()); // nothing to play
         }
 
