@@ -3,7 +3,7 @@ use std::time::Duration;
 use super::songs::Songs;
 use std::ffi::CString;
 use libc::{setlocale, LC_ALL};
-pub unsafe fn init_locale() {
+pub fn init_locale() {
     unsafe {
         let locale = CString::new("").unwrap();
         setlocale(LC_ALL, locale.as_ptr());
@@ -15,8 +15,8 @@ pub fn calc(maxlen: Duration, curr: Duration) -> usize {
     ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
 }
 
-pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page: usize, local_volume_counter: u8, 
-        is_search: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, setnext: usize) {
+pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &Songs, page: usize, local_volume_counter: u8, 
+        is_search: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, desel: bool) {
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
@@ -39,7 +39,7 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
             let display_name = &song.name;
             window.mvaddstr(i as i32 + 1, 2, display_name.as_str());
             window.mvchgat(i as i32 + 1, 2, display_name.chars().count() as i32, pancurses::A_NORMAL, 0);
-            if i == fun_index {
+            if i == fun_index && !desel {
                 // highlight with color pair 3
                 window.mvchgat(i as i32 + 1, 2, display_name.chars().count() as i32, pancurses::A_NORMAL, 3);
             }
@@ -48,12 +48,12 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &mut Songs, page
                 window.mvaddstr(i as i32 + 1, format!("{} *", display_name).chars().count() as i32, " *");
                 window.mvchgat(i as i32 + 1, format!("{} *", display_name).chars().count() as i32, 2, pancurses::A_NORMAL, match songs.stophandler {true => 4, false => 1});
 
-            } else if songs.is_blacklist(i) {
+            } else if songs.is_blacklist(song.original_index) {
                 window.mvaddstr(i as i32 + 1, format!("{} B", display_name).chars().count() as i32, " BL");
                 window.mvchgat(i as i32 + 1, format!("{} B", display_name).chars().count() as i32, 3, pancurses::A_NORMAL, 2);
-            } else if song.original_index == setnext {
-                window.mvaddstr(i as i32 + 1, format!("{} N", display_name).chars().count() as i32, " N");
-                window.mvchgat(i as i32 + 1, format!("{} N", display_name).chars().count() as i32, 2, pancurses::A_NORMAL, 4);
+            } else if song.original_index == songs.get_next() {
+                window.mvaddstr(i as i32 + 1, format!("{} -", display_name).chars().count() as i32, " -");
+                window.mvchgat(i as i32 + 1, format!("{} -", display_name).chars().count() as i32, 2, pancurses::A_NORMAL, 4);
             }
         }  
     }

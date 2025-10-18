@@ -12,7 +12,6 @@ pub struct Song {
     pub searchable: String,
     pub original_index: usize,
     pub duration: Duration,
-    pub current: bool,
 }
 
 pub struct Songs {
@@ -23,6 +22,7 @@ pub struct Songs {
     pub shuffle: bool,
     pub typical_page_size: usize,
     pub blacklist: Vec<usize>,
+    pub setnext: usize,
 }
 
 #[inline]
@@ -50,7 +50,6 @@ impl Songs {
                 searchable,
                 original_index: i,
                 duration,
-                current: false,
             });
         }
 
@@ -62,9 +61,10 @@ impl Songs {
             shuffle: false,
             typical_page_size: 14,
             blacklist: Vec::new(),
+            setnext: usize::MAX,
         }
     }
-    pub fn original_song_path(&self, original_index: usize) -> String {
+    pub fn _original_song_path(&self, original_index: usize) -> String {
         if self.stophandler {
             return "Nothing".to_string();
         }
@@ -75,14 +75,16 @@ impl Songs {
             return "Nothing".to_string();
         }
 
-        for song in &self.all_songs { // search is now useless ig because current_index works properly, i'll leave it for now
-            if song.current {
-                return song.path.clone();
-            }
-        }
-        "Nothing".to_string()
+        return self.all_songs.get(self.current_index).map(|s| s.path.clone()).unwrap_or("Nothing".to_string());
+        
     }
-    pub fn get_original_index(&self, index_in_filtered: usize) -> usize { // im not sure these work xd
+    pub fn set_next(&mut self, original_index: usize) {
+        self.setnext = original_index;
+    }
+    pub fn get_next(&self) -> usize {
+        self.setnext
+    }
+    pub fn _get_original_index(&self, index_in_filtered: usize) -> usize { // im not sure these work xd
         if index_in_filtered >= self.filtered_songs.len() {
             return usize::MAX;
         }
@@ -119,21 +121,7 @@ impl Songs {
         if self.stophandler {
             return "Nothing".to_string();
         }
-        for song in &self.all_songs {
-            if song.current {
-                return song.artist.clone();
-            }
-        }
-        "Nothing".to_string()
-    }
-
-    pub fn set_force(&mut self, original_index: usize) {
-        if original_index >= self.all_songs.len() {
-            return;
-        }
-        self.current_index = original_index;
-        self.stophandler = false;
-        self.renew_current_status(original_index);
+        return self.all_songs.get(self.current_index).map(|s| s.artist.clone()).unwrap_or("Nothing".to_string());
     }
 
     pub fn set_artist(&mut self, index: usize, artist: String) {
@@ -165,22 +153,27 @@ impl Songs {
     }
 
     pub fn blacklist(&mut self, index_in_filtered: usize) {
-        if index_in_filtered >= self.filtered_songs.len() {
+        if index_in_filtered >= self.filtered_songs.len(){
             return;
         }
         let original_index = self.filtered_songs[index_in_filtered].original_index;
+        if original_index == self.current_index {
+            return;
+        }
         if let Some(pos) = self.blacklist.iter().position(|&x| x == original_index) {
             self.blacklist.remove(pos);
+            if !self.shuffle && self.setnext > original_index && self.setnext != usize::MAX {
+                self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
+            }
         } else {
             self.blacklist.push(original_index);
+            if original_index == self.setnext {
+                self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
+            }
         }
     }
 
-    pub fn is_blacklist(&self, index_in_filtered: usize) -> bool {
-        if index_in_filtered >= self.filtered_songs.len() {
-            return false;
-        }
-        let original_index = self.filtered_songs[index_in_filtered].original_index;
+    pub fn is_blacklist(&self, original_index: usize) -> bool {
         self.blacklist.contains(&original_index)
     }
 
@@ -197,32 +190,11 @@ impl Songs {
     }
 
     pub fn current_name(&self) -> String {
-        if self.stophandler {
-            return "Nothing".to_string();
-        }
-
-        for song in &self.all_songs {
-            if song.current {
-                return song.name.clone();
-            }
-        }
-        "Nothing".to_string()
+        return self.all_songs.get(self.current_index).map(|s| s.name.clone()).unwrap_or("Nothing".to_string());
     }
 
     pub fn renew_current_status(&mut self, original_index: usize) {
-        for song in &mut self.all_songs {
-            song.current = false;
-        }
-        if let Some(song) = self.all_songs.get_mut(original_index) {
-            song.current = true;
-        }
-        let filtered_index = self.get_filtered_index(original_index);
-        for song in &mut self.filtered_songs {
-            song.current = false;
-        }
-        if let Some(song) = self.filtered_songs.get_mut(filtered_index) {
-            song.current = true;
-        }
+        self.current_index = original_index;
     }
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> {
         let absolute = absolute_index(index, page, self.typical_page_size);
@@ -235,67 +207,78 @@ impl Songs {
             return Err(0);
         }
         self.renew_current_status(original_index);
-        self.current_index = original_index;
         self.stophandler = false;
+        self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
         Ok(())
     }
+    pub fn get_duration(&self) -> Duration {
+        if self.stophandler {
+            return Duration::from_secs(0);
+        }
+        self.all_songs.get(self.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0))
+    }
 
-    pub fn set_by_next(&mut self) -> Result<usize, ()> {
+    pub fn _algorithm_setnext(&mut self) -> Result<usize, ()> {
         if self.filtered_songs.is_empty() || self.stophandler {
             return Err(()); // nothing to play
         }
 
         let last_index = self.filtered_songs.len() - 1;
-
+        if self.filtered_songs.len() == 1 {
+            let original_index = self.filtered_songs[0].original_index;
+            if self.blacklist.contains(&original_index) {
+                return Err(());
+            } else {
+                return Ok(original_index);
+            }
+        }
         // 🔀 SHUFFLE MODE
         if self.shuffle {
             let mut rng = rand::rng();
+            let candidate_list = self.filtered_songs.iter().map(|s| s.original_index).collect::<Vec<usize>>();
             for _ in 0..=last_index {
-                let candidate = (0..=last_index).choose(&mut rng).unwrap();
-                let original_index = self.filtered_songs[candidate].original_index;
-                if !self.blacklist.contains(&original_index) {
-                    self.current_index = original_index;
-                    self.stophandler = false;
-                    self.renew_current_status(original_index);
-                    return Ok(candidate);
+                let candidate = candidate_list.choose(&mut rng).unwrap();
+                if !self.blacklist.contains(candidate) && *candidate != self.current_index {
+                    return Ok(*candidate);
                 }
             }
             return Err(());
         }
 
         // ▶️ SEQUENTIAL MODE
-        let mut try_index = self.get_filtered_index(self.current_index) + 1;
-        while try_index <= last_index {
-            let original_index = self.filtered_songs[try_index].original_index;
+        for i in (self.get_filtered_index(self.current_index) + 1)..self.filtered_songs.len() {
+            let original_index = self.filtered_songs[i].original_index;
             if !self.blacklist.contains(&original_index) {
-                self.current_index = original_index;
-                self.stophandler = false;
-                self.renew_current_status(original_index);
-                return Ok(try_index);
+                return Ok(original_index);
             }
-            try_index += 1;
         }
-
-        try_index = 0;
-        while try_index < self.get_filtered_index(self.current_index) {
-            let original_index = self.filtered_songs[try_index].original_index;
+        for i in 0..=self.get_filtered_index(self.current_index) {
+            let original_index = self.filtered_songs[i].original_index;
             if !self.blacklist.contains(&original_index) {
-                self.current_index = original_index;
-                self.stophandler = false;
-                self.renew_current_status(original_index);
-                return Ok(try_index);
+                return Ok(original_index);
             }
-            try_index += 1;
         }
-
         Err(())
+
+    }
+
+    pub fn set_by_next(&mut self) -> Result<usize, ()> {
+        if self.setnext == usize::MAX {
+            Err(())
+        } else {
+            self.renew_current_status(self.setnext);
+            self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
+            Ok(self.current_index)
+        }
     }
 
     pub fn stop(&mut self) {
         self.stophandler = true;
+        self.setnext = usize::MAX;
     }
 
     pub fn shuffle(&mut self) {
         self.shuffle = !self.shuffle;
+        self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
     }
 }

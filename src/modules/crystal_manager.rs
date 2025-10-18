@@ -6,7 +6,6 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
 
-use crate::modules::songs;
 
 use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
 const UP:           char= 'u';
@@ -25,6 +24,7 @@ const SEARCH:       char= 'h';
 const TOP:          char= 'g';
 const CHANGE:       char= 'c';
 const SETNEXT:      char= 'e';
+const DESEL:        char= 'd';
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
@@ -33,13 +33,12 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut fun_index               = 0;
     let mut window                  = initscr();
     let mut specialinteraction      = false;
-    let mut local_volume_counter    = Volume {steps: 50, step_div: 5};
+    let mut local_volume_counter    = Volume {steps: 50, step_div: 2};
     let mut isloop                  = false;
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = false;
-    let mut setnext                 = usize::MAX;
+    let mut desel                   = false;
     let mut is_search               = (0, String::from("false"));
-    let mut suspend_redraw          = false;
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
@@ -48,10 +47,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     init_curses(&mut window);
     let (maxy, maxx)                = window.get_max_yx();
     loop {
-        redraw(&mut window, maxx, maxy, &mut songs, page,
+        redraw(&mut window, maxx, maxy, &songs, page,
                 local_volume_counter.steps, is_search.1.clone(),
-                isloop, reinit_rpc, maxlen, fcalc, fun_index,
-                setnext
+                isloop, reinit_rpc, maxlen, fcalc, fun_index, desel
             );
 
 
@@ -74,11 +72,11 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     Input::KeyEnter | Input::Character('\n') => {
                         match is_search.0 {
                             1 => {
-                                songs.search(is_search.1.clone());
+                                songs.search(is_search.1);
                                 fun_index = 0;
                                 page = 1;
                             },
-                            2 => {songs.set_artist(songs.match_c(), is_search.1.clone());},
+                            2 => {songs.set_artist(songs.match_c(), is_search.1);},
                             _ => {}
                         }
                         is_search = (0, String::from("false"));
@@ -99,13 +97,6 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 Input::KeyF13 => { // song ended
                     if songs.stophandler {
                         continue;
-                    }
-                    println!("Song ended rpc received");
-                    let mut sp: String = "N/A".to_string();
-                    if setnext != usize::MAX {
-                        songs.set_force(setnext);
-                        sp = songs.original_song_path(setnext);
-                        setnext = usize::MAX;
                     } else if !isloop {
                         match songs.set_by_next() {
                             Ok(_) => (),
@@ -114,14 +105,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                             }
                         }
                     }
-                    match sp.as_str() {
-                        "N/A" => sp = songs.current_song_path(),
-                        _ => (),
-                    }
 
-                    tx.send(("play_track", sp)).unwrap();
+                    tx.send(("play_track", songs.current_song_path())).unwrap();
                     reinit_rpc = true;
-                    maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
+                    maxlen = songs.get_duration();
                     let _ = rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64));
                     continue;
                 },
@@ -130,15 +117,15 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         reinit_rpc = false;
                     }
                     continue;
-                }
+                },
 
                 Input::Character(QUIT) => break,
 
                 Input::KeyDown | Input::Character(DOWN) => {
                     if specialinteraction {
-                        if local_volume_counter.as_f64() > 0.0 {
-                            local_volume_counter.step_down();
-                        }
+
+                        local_volume_counter.step_down();
+
                         tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
                         if fun_index+1 < songs.typical_page_size && absolute_index(fun_index, page, songs.typical_page_size) < songs.filtered_songs.len()-1 { // protection for page size
@@ -153,9 +140,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::KeyUp | Input::Character(UP) => {
                     if specialinteraction {
-                        if local_volume_counter.as_f64() < 1.0 {
-                            local_volume_counter.step_up();
-                        }
+
+                        local_volume_counter.step_up();
+
                         tx.send(("set_volume", local_volume_counter.as_f32().to_string())).unwrap();
                     } else {
                         if fun_index > 0 {
@@ -172,7 +159,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     if songs.set_by_pindex(fun_index, page) != Err(0) {
                         tx.send(("play_track", songs.current_song_path())).unwrap();
                         reinit_rpc = true;
-                        maxlen = songs.all_songs.get(songs.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0));
+                        maxlen = songs.get_duration();
                         for _i in 0..=1 {
                             match rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64)) {
                                 Ok(()) => break,
@@ -185,11 +172,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 },
 
                 Input::Character(SPECIAL) => {
-                    if specialinteraction {
-                        specialinteraction = false;
-                    } else {
-                        specialinteraction = true;
-                    }
+                    specialinteraction = !specialinteraction;
                     continue;
                 },
 
@@ -210,37 +193,40 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 },
 
                 Input::Character(RESUME) => {
+                    if songs.current_index == usize::MAX {
+                        continue;
+                    }
                     songs.stophandler = false;
                     tx.send(("resume", String::new())).unwrap();
                     continue;
                 },
                 Input::KeyRight | Input::Character(RIGHT) => {
                     tx.send(("forward", String::new())).unwrap();
-                    suspend_redraw = true;
                     continue;
 
-                }
+                },
                 Input::KeyLeft | Input::Character(LEFT) => {
                     tx.send(("back", String::new())).unwrap();
-                    suspend_redraw = true;
-                    continue;
-                    
+                    continue; 
                 },
                 Input::Character(SHUFFLE) => { songs.shuffle(); },
                 Input::Character(SEARCH) => {
                     is_search.1.clear();
                     is_search.0 = 1;
                     continue;
-                }, // SEARCH MODE TODO
+                },
                 Input::Character(TOP) => { page = 1; fun_index = 0; continue;},
                 Input::Character(CHANGE) => {
                     is_search.1.clear();
                     is_search.0 = 2;
                     continue;
-
                 },
                 Input::Character(SETNEXT) => {
-                    setnext = songs.get_original_index(absolute_index(fun_index, page, songs.typical_page_size));
+                    songs.set_next(absolute_index(fun_index, page, songs.typical_page_size));
+                    continue;
+                },
+                Input::Character(DESEL) => {
+                    desel = !desel;
                     continue;
                 },
 
