@@ -26,6 +26,10 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                 if x == "stop" {
                     break;
                 }
+                if x == "clear" {
+                    let _ = drpc.clear_activity();
+                    continue;
+                }
                 let _ = drpc.clear_activity();
                 st_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                 title = artist_data(&x);

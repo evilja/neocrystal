@@ -7,7 +7,7 @@ use pancurses::{initscr, Input};
 use glob::glob;
 
 
-use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume};
+use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::Volume, utils::SlidingText};
 const UP:           char= 'u';
 const DOWN:         char= 'j';
 const LEFT:         char= 'n';
@@ -38,6 +38,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut maxlen: Duration        = Duration::from_secs(0);
     let mut reinit_rpc              = false;
     let mut desel                   = false;
+    let mut local_sliding           = SlidingText::new("Nothing", 27, Duration::from_millis(300));
     let mut is_search               = (0, String::from("false"));
     let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
     let _rpc_thread                 = thread::spawn(move || {
@@ -49,7 +50,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     loop {
         redraw(&mut window, maxx, maxy, &songs, page,
                 local_volume_counter.steps, is_search.1.clone(),
-                isloop, reinit_rpc, maxlen, fcalc, fun_index, desel
+                isloop, reinit_rpc, maxlen, fcalc, fun_index, desel, local_sliding.visible_text()
             );
 
 
@@ -112,6 +113,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     reinit_rpc = true;
                     maxlen = songs.get_duration();
                     let _ = rpctx.send((songs.current_song_path().to_string(), maxlen.as_secs_f32() as u64));
+                    local_sliding.reset_to(songs.current_name());
                     continue;
                 },
                 Input::KeyF14 => { //duration sent
@@ -159,7 +161,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::Character(PLAY) => {
                     if songs.set_by_pindex(fun_index, page) != Err(0) {
-                        tx.send(("play_track", songs.current_song_path())).unwrap();
+                        match tx.send(("play_track", songs.current_song_path())) {
+                            Ok(()) => {},
+                            Err(_) => { continue; }
+                        }
                         reinit_rpc = true;
                         maxlen = songs.get_duration();
                         for _i in 0..=1 {
@@ -169,6 +174,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                             }
                             fcalc = Duration::from_secs(0);
                         }
+                        local_sliding.reset_to(songs.current_name());
                     }
                     continue;
                 },
@@ -186,6 +192,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 Input::Character(STOP) => {
                     songs.stop();
                     tx.send(("pause", String::new())).unwrap();
+                    rpctx.send(("clear".to_string(), 0)).unwrap();
                     continue;
                 },
 

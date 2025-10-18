@@ -15,8 +15,13 @@ pub fn calc(maxlen: Duration, curr: Duration) -> usize {
     ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
 }
 
+#[inline]
+pub fn to_mm_ss(duration: Duration) -> String {
+    format!("{:02}:{:02}", duration.as_secs() / 60, duration.as_secs() % 60)
+}
+
 pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &Songs, page: usize, local_volume_counter: u8, 
-        is_search: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, desel: bool) {
+        is_search: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, desel: bool, sliding: String) {
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
@@ -58,13 +63,14 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &Songs, page: us
         }  
     }
     window.mvaddstr(maxy-5, 0, "├".to_owned() + "─".repeat((maxx-2) as usize).as_str() + "┤");
-    window.mvaddstr(maxy-4, 2, format!("{}", songs.current_name().replace("music/", "").replace("music\\", "").replace(".mp3", "")).as_str());
-    window.mvchgat(maxy-4, 2, maxx-4, pancurses::A_NORMAL, 1);
-    window.mvaddstr(maxy-3, 2, "Shuffle  Loop                     Rpc      Vol ");
-    window.mvaddstr(maxy-2, 2, format!("{} ", match songs.shuffle { true => "true", false => "false" }));
-    window.mvchgat(maxy-2, 2, format!("{} ", match songs.shuffle { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match songs.shuffle { true => 1, false => 2 });
-    window.mvaddstr(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }));
-    window.mvchgat(maxy-2, 11, format!("{} ", match isloop { true => "true", false => "false" }).len() as i32, pancurses::A_NORMAL, match isloop { true => 1, false => 2 });
+
+    window.mvaddstr(maxy-4, 12, sliding.as_str());
+    window.mvchgat(maxy-4, 12, sliding.chars().count() as i32, pancurses::A_NORMAL, 1);
+    window.mvaddstr(maxy-3, 2, "Shu  Rep                               Rpc Vol ");
+    window.mvaddstr(maxy-2, 2, format!("{} ", match songs.shuffle { true => "yes", false => "no" }));
+    window.mvchgat(maxy-2, 2, format!("{} ", match songs.shuffle { true => "yes", false => "no" }).len() as i32, pancurses::A_NORMAL, match songs.shuffle { true => 1, false => 2 });
+    window.mvaddstr(maxy-2, 7, format!("{} ", match isloop { true => "yes", false => "no" }));
+    window.mvchgat(maxy-2, 7, format!("{} ", match isloop { true => "yes", false => "no" }).len() as i32, pancurses::A_NORMAL, match isloop { true => 1, false => 2 });
     {
         let artist_name = songs.get_artist_search();
         window.mvaddstr(maxy-2, maxx/2 - (artist_name.chars().count() as i32)/2, artist_name.as_str());
@@ -77,16 +83,20 @@ pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &Songs, page: us
     );
     window.mvchgat(maxy-2, maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 1), (format!("{}", local_volume_counter)).len() as i32, pancurses::A_NORMAL, 0);
     if reinit_rpc { // reinit display
-        window.mvaddstr(maxy-2, maxx - 14, "init");
-        window.mvchgat(maxy-2, maxx - 14, "init".len() as i32, pancurses::A_NORMAL, 2);
+        window.mvaddstr(maxy-2, maxx - 9, "no");
+        window.mvchgat(maxy-2, maxx - 9, "no".len() as i32, pancurses::A_NORMAL, 2);
     } else {
-        window.mvaddstr(maxy-2, maxx - 14, "done");
-        window.mvchgat(maxy-2, maxx - 14, "done".len() as i32, pancurses::A_NORMAL, 1);
+        window.mvaddstr(maxy-2, maxx - 9, "yes");
+        window.mvchgat(maxy-2, maxx - 9, "yes".len() as i32, pancurses::A_NORMAL, 1);
     }
     window.mvaddstr(maxy-3, maxx/2-7, "─".repeat(15));
     if maxlen != Duration::from_secs(0) {
         window.mvchgat(maxy-3, maxx/2-7, calc(maxlen, fcalc) as i32, pancurses::A_NORMAL, 1);
     }
+    window.mvaddstr(maxy-3, maxx/2 - 13, to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()).as_str());
+    window.mvchgat(maxy-3, maxx/2 - 13, to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()).chars().count() as i32, pancurses::A_NORMAL, 0);
+    window.mvaddstr(maxy-3, maxx/2 + 9, to_mm_ss(maxlen).as_str());
+    window.mvchgat(maxy-3, maxx/2 + 9, to_mm_ss(maxlen).chars().count() as i32, pancurses::A_NORMAL, 0);
     window.refresh();
 }
 

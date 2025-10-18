@@ -115,13 +115,10 @@ impl Songs {
         if self.stophandler {
             return "Nothing".to_string();
         }
-        self.all_songs.get(index).map(|s| s.artist.clone()).unwrap_or("Nothing".to_string())
+        self.all_songs.get(index).map(|s| s.artist.clone()).unwrap_or("Unknown".to_string())
     }
     pub fn get_artist_search(&self) -> String {
-        if self.stophandler {
-            return "Nothing".to_string();
-        }
-        return self.all_songs.get(self.current_index).map(|s| s.artist.clone()).unwrap_or("Nothing".to_string());
+        return self.all_songs.get(self.current_index).map(|s| s.artist.clone()).unwrap_or("Unknown".to_string());
     }
 
     pub fn set_artist(&mut self, index: usize, artist: String) {
