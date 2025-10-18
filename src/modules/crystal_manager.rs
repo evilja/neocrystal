@@ -1,6 +1,6 @@
 extern crate pancurses;
 extern crate glob;
-use std::thread;
+use std::thread::{self};
 use std::time::{Duration};
 use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
@@ -53,17 +53,19 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
             );
 
 
-        let key_opt = match comm_rx.try_recv() {
-            Ok(_key) => match _key.0 {
-                "turn" => Some(Input::KeyF13),
-                "duration" => {
-                    fcalc = _key.1;
-                    Some(Input::KeyF14)
+        let key_opt = window.getch().or_else(|| {
+            match comm_rx.recv_timeout(Duration::from_millis(25)) {
+                Ok(_key) => match _key.0 {
+                    "turn" => Some(Input::KeyF13),
+                    "duration" => {
+                        fcalc = _key.1;
+                        Some(Input::KeyF14)
+                    },
+                    _ => Some(Input::KeyF15),
                 },
-                _ => Some(Input::KeyF15),
-            },
-            Err(_) => window.getch(),
-        };
+                Err(_) => None,
+            }
+        });
 
         if let Some(key) = key_opt {
             if is_search.0 != 0 {
