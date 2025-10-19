@@ -21,7 +21,7 @@ pub fn to_mm_ss(duration: Duration) -> String {
 }
 
 pub fn redraw(window: &mut Window, maxx: i32, maxy: i32, songs: &Songs, page: usize, local_volume_counter: u8, 
-        is_search: String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, desel: bool, sliding: String) {
+        is_search: &String, isloop: bool, reinit_rpc: bool, maxlen: Duration, fcalc: Duration, fun_index: usize, desel: bool, sliding: String) {
     window.erase();
     //window.mvchgat(0, 0, 999, pancurses::A_NORMAL, 9);
     window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');

@@ -121,7 +121,7 @@ impl Songs {
         return self.all_songs.get(self.current_index).map(|s| s.artist.clone()).unwrap_or("Unknown".to_string());
     }
 
-    pub fn set_artist(&mut self, index: usize, artist: String) {
+    pub fn set_artist(&mut self, index: usize, artist: &String) {
         if self.stophandler || index >= self.filtered_songs.len() {
             return;
         }
@@ -134,7 +134,7 @@ impl Songs {
         }
     }
 
-    pub fn search(&mut self, pattern: String) {
+    pub fn search(&mut self, pattern: &String) {
         if pattern == "false" || pattern.is_empty() {
             self.filtered_songs = self.all_songs.clone();
             self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);

@@ -17,31 +17,37 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
     })
     .persist();
     drpc.start();
-    let mut st_ts: u64;
-    let mut title: String;
-    let mut ed_ts: u64;
+    let mut st_ts: (u64, u64) = (0, 0);
+    let mut title: String = "".to_string();
+    let mut detai: String = "".to_string();
+    let mut ed_ts: (u64, u64) = (0, 0);
     loop {
         match comm_recv.recv() {
             Ok((x, y)) => {
-                if x == "stop" {
+                if x == "%stop" {
                     break;
-                }
-                if x == "clear" {
+                } else if x == "%clear" {
                     let _ = drpc.clear_activity();
                     continue;
+                } else if x == "%renew" { 
+                    st_ts.1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - y;
+                    ed_ts.1 = ed_ts.0 - st_ts.0 + st_ts.1;
+                } else {
+                    st_ts.0 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 3;
+                    title = artist_data(&x);
+                    detai = x.replace("music/", "").replace("music\\", "").replace(".mp3", "");
+                    ed_ts.0 = st_ts.0 + y;
+                    let _ = drpc.clear_activity();
+                    st_ts.1 = st_ts.0;
+                    ed_ts.1 = ed_ts.0;
                 }
-                let _ = drpc.clear_activity();
-                st_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-                title = artist_data(&x);
-                ed_ts = st_ts + y;
-                println!("st_ts is {}, ed_ts is {}", st_ts, ed_ts);
-                
+                println!("st_ts is {}, ed_ts is {}", st_ts.1, ed_ts.1);
                 for _ in 0..=5 {
                     match drpc.set_activity(|act| {
                     act
                         .activity_type(ActivityType::Listening)
                         .state(&title)
-                        .details(x.clone().replace("music/", "").replace("music\\", "").replace(".mp3", ""))
+                        .details(&detai)
                         .assets(|ass| {
                             ass
                                 .small_image("github")
@@ -51,8 +57,8 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                         })
                         .timestamps(|ts| {
                             ts
-                                .start(st_ts)
-                                .end(ed_ts)
+                                .start(st_ts.1)
+                                .end(ed_ts.1)
                         })
                     }) {
                         Ok(_) => break,

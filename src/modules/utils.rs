@@ -98,3 +98,55 @@ impl SlidingText {
         }
     }
 }
+
+pub struct SearchQuery {
+    pub mode: u8,
+    pub query: String,
+}
+impl SearchQuery {
+    pub fn default(&mut self) {
+        self.mode = 0;
+        self.query = String::from("false");
+    }
+    pub fn to_mode(&mut self, mode: u8) {
+        self.mode = mode;
+        self.query = String::new();
+    }
+}
+pub enum ReinitMode {
+    Renew,
+    Init,
+    None,
+}
+pub struct Timer {
+    pub fcalc: Duration,
+    pub maxlen: Duration,
+}
+pub struct State {
+    pub spint: bool,
+    pub isloop: bool,
+    pub desel: bool,
+}
+pub struct RpcState {
+    pub reinit: bool,
+    pub timer: Instant,
+    pub mode: ReinitMode,
+}
+pub struct Indexer {
+    pub page: usize,
+    pub index: usize,
+}
+
+
+impl RpcState {
+    pub fn setup(&mut self, mode: ReinitMode) {
+        self.reinit = true;
+        self.timer = Instant::now() + Duration::from_secs(3);
+        self.mode = mode;
+    }
+    pub fn reset(&mut self) {
+        self.reinit = false;
+        self.timer = Instant::now();
+        self.mode = ReinitMode::None;
+    }
+}
