@@ -90,16 +90,16 @@ impl Songs {
         }
         self.filtered_songs[index_in_filtered].original_index
     }
-    pub fn get_filtered_index(&self, original_index: usize) -> usize { // im not sure these work xd
+    pub fn get_filtered_index(&self, original_index: usize) -> Result<usize, ()> { // im not sure these work xd
         if original_index == usize::MAX {
-            return usize::MAX;
+            return Err(());
         }
         for (i, song) in self.filtered_songs.iter().enumerate() {
             if song.original_index == original_index {
-                return i;
+                return Ok(i);
             }
         }
-        usize::MAX
+        Err(())
     }
     pub fn match_c(&self) -> usize { // wtf does that even do? idk but i wrote it and it works
         for i in 0..self.filtered_songs.len() {
@@ -137,6 +137,7 @@ impl Songs {
     pub fn search(&mut self, pattern: String) {
         if pattern == "false" || pattern.is_empty() {
             self.filtered_songs = self.all_songs.clone();
+            self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
             return;
         }
 
@@ -147,6 +148,7 @@ impl Songs {
             .filter(|s| s.searchable.contains(&pattern))
             .cloned()
             .collect();
+        self.setnext = self._algorithm_setnext().unwrap_or(usize::MAX);
     }
 
     pub fn blacklist(&mut self, index_in_filtered: usize) {
@@ -215,12 +217,13 @@ impl Songs {
         self.all_songs.get(self.current_index).map(|s| s.duration).unwrap_or(Duration::from_secs(0))
     }
 
+
     pub fn _algorithm_setnext(&mut self) -> Result<usize, ()> {
         if self.filtered_songs.is_empty() || self.stophandler {
             return Err(()); // nothing to play
         }
 
-        let last_index = self.filtered_songs.len() - 1;
+        // If only 1 entry, return it (unless blacklisted)
         if self.filtered_songs.len() == 1 {
             let original_index = self.filtered_songs[0].original_index;
             if self.blacklist.contains(&original_index) {
@@ -229,35 +232,56 @@ impl Songs {
                 return Ok(original_index);
             }
         }
+
         // 🔀 SHUFFLE MODE
         if self.shuffle {
             let mut rng = rand::rng();
-            let candidate_list = self.filtered_songs.iter().map(|s| s.original_index).collect::<Vec<usize>>();
-            for _ in 0..=last_index {
-                let candidate = candidate_list.choose(&mut rng).unwrap();
-                if !self.blacklist.contains(candidate) && *candidate != self.current_index {
-                    return Ok(*candidate);
+            // collect candidates once
+            let candidate_list = self
+                .filtered_songs
+                .iter()
+                .map(|s| s.original_index)
+                .filter(|orig| !self.blacklist.contains(orig) && *orig != self.current_index)
+                .collect::<Vec<_>>();
+
+            if candidate_list.is_empty() {
+                return Err(());
+            }
+
+            // pick randomly from candidate_list
+            let idx = rng.random_range(0..candidate_list.len());
+            return Ok(candidate_list[idx]);
+        }
+
+        // ▶️ SEQUENTIAL MODE (safe)
+        if let Ok(start) = self.get_filtered_index(self.current_index) {
+            // try after current
+            for i in (start + 1)..self.filtered_songs.len() {
+                let original_index = self.filtered_songs[i].original_index;
+                if !self.blacklist.contains(&original_index) {
+                    return Ok(original_index);
                 }
             }
-            return Err(());
+            // wrap-around: check from 0 up to start
+            for i in 0..=start {
+                let original_index = self.filtered_songs[i].original_index;
+                if !self.blacklist.contains(&original_index) {
+                    return Ok(original_index);
+                }
+            }
+        } else {
+            // current not found (or current unset) -> just search from start
+            for i in 0..self.filtered_songs.len() {
+                let original_index = self.filtered_songs[i].original_index;
+                if !self.blacklist.contains(&original_index) && original_index != self.current_index {
+                    return Ok(original_index);
+                }
+            }
         }
 
-        // ▶️ SEQUENTIAL MODE
-        for i in (self.get_filtered_index(self.current_index) + 1)..self.filtered_songs.len() {
-            let original_index = self.filtered_songs[i].original_index;
-            if !self.blacklist.contains(&original_index) {
-                return Ok(original_index);
-            }
-        }
-        for i in 0..=self.get_filtered_index(self.current_index) {
-            let original_index = self.filtered_songs[i].original_index;
-            if !self.blacklist.contains(&original_index) {
-                return Ok(original_index);
-            }
-        }
         Err(())
-
     }
+
 
     pub fn set_by_next(&mut self) -> Result<usize, ()> {
         if self.setnext == usize::MAX {

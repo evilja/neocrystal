@@ -67,6 +67,9 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     }
                 },
                 "back" =>{
+                    if cached == "uinit".to_string() {
+                        continue;
+                    }
                     let cachegetpos = sink.get_pos();
                     let file: File = File::open(cached.clone())?;
                     let source: Decoder<BufReader<File>> = Decoder::new(BufReader::new(file))?;

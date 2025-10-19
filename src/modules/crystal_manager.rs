@@ -52,8 +52,6 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                 local_volume_counter.steps, is_search.1.clone(),
                 isloop, reinit_rpc, maxlen, fcalc, fun_index, desel, local_sliding.visible_text()
             );
-
-
         let key_opt = window.getch().or_else(|| {
             match comm_rx.recv_timeout(Duration::from_millis(25)) {
                 Ok(_key) => match _key.0 {
