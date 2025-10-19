@@ -7,7 +7,12 @@ use pancurses::{initscr, Input};
 use glob::glob;
 
 
-use super::{songs::{Songs, absolute_index}, presence::rpc_handler, curses::*, utils::{Volume, SearchQuery, State, RpcState, Indexer, Timer, ReinitMode}, utils::SlidingText};
+use super::{songs::{Songs, absolute_index}, 
+            presence::rpc_handler, 
+            curses::*, 
+            utils::{Volume, SearchQuery, State, RpcState, Indexer, Timer, ReinitMode}, 
+            utils::SlidingText};
+
 const UP:           char= 'u';
 const DOWN:         char= 'j';
 const LEFT:         char= 'n';
@@ -25,8 +30,6 @@ const TOP:          char= 'g';
 const CHANGE:       char= 'c';
 const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
-
-
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
