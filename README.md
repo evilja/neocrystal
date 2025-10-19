@@ -30,10 +30,12 @@ h -> search
 
 c -> change artist name (edit metadata)
 
+g -> go to top
+
 TODO
 
-idk nothing
+nothing
 
 I'M AWARE
 
-DiscordRPC does NOT update with SEEK functions.
+next song selection algorithm doesn't take isloop into account, which is fine if you ask me.
