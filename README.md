@@ -34,7 +34,7 @@ g -> go to top
 
 TODO
 
-nothing
+Progress bar seek / Volume functions with clickable UI
 
 I'M AWARE
 
