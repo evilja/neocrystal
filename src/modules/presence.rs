@@ -5,15 +5,16 @@ use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 use super::utils::artist_data;
 
+
 pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
     let mut drpc = Client::new(1003981361079668829);
     drpc.on_ready(|_ctx| {
-        println!("READY!");
+        ()
     })
     .persist();
 
     drpc.on_error(|ctx| {
-        eprintln!("An error occured, {:?}", ctx.event);
+        ()
     })
     .persist();
     drpc.start();
@@ -41,7 +42,6 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     st_ts.1 = st_ts.0;
                     ed_ts.1 = ed_ts.0;
                 }
-                println!("st_ts is {}, ed_ts is {}", st_ts.1, ed_ts.1);
                 for _ in 0..=5 {
                     match drpc.set_activity(|act| {
                     act

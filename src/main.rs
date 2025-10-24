@@ -7,8 +7,6 @@ use std::sync::mpsc::{self, Receiver, Sender};
 mod modules;
 use crate::modules::curses::init_locale;
 use crate::modules::{audio::play_audio, crystal_manager::crystal_manager};
-
-
 fn main() { // establish communications and threads, then give the job to crystal_manager fn
     init_locale();
     let (tx, rx): (Sender<(&'static str, String)>, Receiver<(&'static str, String)>)                = mpsc::channel();

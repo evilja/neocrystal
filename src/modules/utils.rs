@@ -1,9 +1,11 @@
 use id3::TagLike;
 
+
 pub struct Volume {
     pub steps: u8,
     pub step_div: u8,
 }
+
 impl Volume {
     pub fn step_up(&mut self) {
         self.steps += self.step_div;

@@ -6,13 +6,11 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::path::Path;
 use mp3_duration;
 
-
-
 pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sender<Instant>) -> Result<String, Box<dyn std::error::Error>> {
     let stream_handle: OutputStream     = rodio::OutputStreamBuilder::open_default_stream().expect("open default audio stream");
     let sink                            = rodio::Sink::connect_new(&stream_handle.mixer());
     let mut cached: String              = "uinit".to_string();
-    let mut cached_duration: Duration   = Duration::from_secs(0);
+    let mut cached_duration: Duration   = Duration::ZERO;
     loop {
         if let Ok((command, value)) = receiver.recv_timeout(Duration::from_secs(1)) {
             match command {
@@ -57,7 +55,7 @@ pub fn play_audio(receiver: Receiver<(&'static str, String)>, transmitter: Sende
                     cached = value;
                 },
                 "forward" => {
-                    if sink.get_pos() + Duration::from_secs(5) >= cached_duration {
+                    if sink.get_pos() + Duration::from_secs(5) >= cached_duration && cached_duration != Duration::ZERO {
                         // If the new position is beyond the end of the track, seek to the end
                         let _ = sink.try_seek(cached_duration - Duration::from_secs(1));
                     } else {

@@ -1,12 +1,13 @@
-use pancurses::{Window, mousemask};
+use pancurses::{Window, mousemask,ACS_VLINE,ACS_HLINE,ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, COLOR_PAIR};
 use std::time::Duration;
 use super::songs::Songs;
 use super::crystal_manager::{UI, UIElement, Action, Part};
 use std::ffi::CString;
 use libc::{setlocale, LC_ALL};
+
 pub fn init_locale() {
     unsafe {
-        let locale = CString::new("").unwrap();
+        let locale = CString::new("en_US.UTF-8").unwrap();
         setlocale(LC_ALL, locale.as_ptr());
     }
 }
@@ -39,7 +40,17 @@ pub fn redraw(
     sliding: String,
 ) {
     window.erase();
-    window.border('│', '│', '─', '─', '┌', '┐', '└', '┘');
+    window.border(
+        ACS_VLINE(),   // sol kenar
+        ACS_VLINE(),   // sağ kenar
+        ACS_HLINE(),   // üst kenar
+        ACS_HLINE(),   // alt kenar
+        ACS_ULCORNER(),// sol üst köşe
+        ACS_URCORNER(),// sağ üst köşe
+        ACS_LLCORNER(),// sol alt köşe
+        ACS_LRCORNER() // sağ alt köşe
+    );
+
 
     ui.header_elements.clear();
     ui.body_elements.clear();
@@ -87,7 +98,12 @@ pub fn redraw(
     }
 
     // FOOTER — Sliding text
-    ui.add(UIElement::new(format!("├{}┤", "─".repeat((maxx - 2) as usize)), 0, maxy - 5, 0), Part::Footer);
+    window.mv(maxy - 5, 0);
+    window.addch(ACS_LTEE());
+    for _ in 0..(maxx-2) {
+        window.addch(ACS_HLINE());
+    }
+    window.addch(ACS_RTEE());
     ui.add(UIElement::new(sliding, 12, maxy - 4, 1), Part::Footer);
 
     // FOOTER — Shuffle / Loop / RPC / Volume
@@ -105,10 +121,22 @@ pub fn redraw(
     ui.add(UIElement::new(format!("{}", local_volume_counter), maxx - ((format!("{} ", local_volume_counter)).len() as i32 + 1), maxy - 2, 0), Part::Footer);
 
     // FOOTER — Progress bar
-    ui.add(UIElement::new("─".repeat(15), maxx / 2 - 7, maxy - 3, 0), Part::Footer);
+    let mut start = maxx / 2 - 7;
+    for i in 0..15 {
+        window.mv(maxy-3, start);
+        window.addch(ACS_HLINE());
+        start += 1
+    }
     if maxlen != Duration::from_secs(0) {
         let filled = calc(maxlen, fcalc);
-        ui.add(UIElement::new("─".repeat(filled as usize), maxx / 2 - 7, maxy - 3, 1), Part::Footer);
+        let mut start = maxx / 2 - 7;
+        for i in 0..filled {
+            window.mv(maxy-3, start);
+            window.attron(COLOR_PAIR(1));
+            window.addch(ACS_HLINE());
+            window.attroff(COLOR_PAIR(1));
+            start += 1
+        }
     }
     ui.add(UIElement::new(to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()), maxx/2 - 13, maxy - 3, 0), Part::Footer);
     ui.add(UIElement::new(to_mm_ss(maxlen), maxx/2 + 9, maxy - 3, 0), Part::Footer);

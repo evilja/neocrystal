@@ -4,6 +4,8 @@ use mp3_duration;
 use std::time::Duration;
 use std::path::Path;
 use std::thread::spawn;
+
+
 #[derive(Clone)]
 pub struct Song {
     pub path: String,
@@ -11,6 +13,7 @@ pub struct Song {
     pub artist: String,
     pub searchable: String,
     pub duration: Duration,
+    pub forced: bool,
 }
 
 pub struct Songs {
@@ -64,6 +67,7 @@ impl Songs {
                 artist,
                 searchable,
                 duration: durations[i],
+                forced: false,
             });
         }
 
@@ -94,6 +98,7 @@ impl Songs {
 
     pub fn set_next(&mut self, original_index: usize) {
         self.setnext = original_index;
+        self.all_songs[original_index].forced = true;
     }
 
     pub fn get_next(&self) -> usize {
@@ -169,6 +174,7 @@ impl Songs {
         } else {
             self.blacklist.push(original_index);
             if original_index == self.setnext {
+                if self.setnext != usize::MAX { self.all_songs[self.setnext].forced = false; }
                 self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
             }
         }
@@ -187,6 +193,7 @@ impl Songs {
 
     fn renew_current_status(&mut self, original_index: usize) {
         self.current_index = original_index;
+        self.all_songs[original_index].forced = false;
     }
 
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> {
@@ -219,7 +226,7 @@ impl Songs {
         if self.filtered_songs.is_empty() || self.stophandler {
             return Err(());
         }
-
+        if self.setnext != usize::MAX && self.all_songs[self.setnext].forced { return Ok(self.setnext) }
         if self.filtered_songs.len() == 1 {
             let original_index = self.filtered_songs[0];
             if self.blacklist.contains(&original_index) {
@@ -281,7 +288,7 @@ impl Songs {
 
     pub fn stop(&mut self) {
         self.stophandler = true;
-        self.setnext = usize::MAX;
+        //self.setnext = usize::MAX;
     }
 
     pub fn shuffle(&mut self) {

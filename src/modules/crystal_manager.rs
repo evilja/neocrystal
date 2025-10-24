@@ -6,7 +6,6 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
 
-
 use super::{songs::{Songs, absolute_index}, 
             presence::rpc_handler, 
             curses::*, 
@@ -101,9 +100,9 @@ impl UIElement {
 
     fn draw(&self, window: &Window) {
         if self.displayed {
-            window.attron(COLOR_PAIR(self.color as u64));
+            window.attron(COLOR_PAIR(self.color as u32));
             window.mvaddstr(self.y as i32, self.x as i32, &self.text);
-            window.attroff(COLOR_PAIR(self.color as u64));
+            window.attroff(COLOR_PAIR(self.color as u32));
         }
     }
 }
