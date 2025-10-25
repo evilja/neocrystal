@@ -97,8 +97,8 @@ impl Songs {
     }
 
     pub fn set_next(&mut self, original_index: usize) {
-        self.setnext = original_index;
-        self.all_songs[original_index].forced = true;
+        self.setnext = self.filtered_songs[original_index];
+        self.all_songs[self.setnext].forced = true;
     }
 
     pub fn get_next(&self) -> usize {
