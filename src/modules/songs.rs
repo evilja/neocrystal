@@ -1,4 +1,6 @@
 use rand::prelude::*;
+use crate::modules::utils::{addto_playlist, playlist_data};
+
 use super::utils::{artist_data, change_artist};
 use mp3_duration;
 use std::time::Duration;
@@ -54,7 +56,7 @@ impl Songs {
         }
 
         for (i, path) in paths.iter().enumerate() {
-            let artist = artist_data(path);
+            let artist = artist_data(path) + " " + &playlist_data(path);
             let name = path
                 .replace("music/", "")
                 .replace("music\\", "")
@@ -133,9 +135,20 @@ impl Songs {
         let idx = self.filtered_songs[index_in_filtered];
         if change_artist(&self.all_songs[idx].path, artist).is_ok() {
             self.all_songs[idx].artist = artist.clone();
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + 
+                                    &self.all_songs[idx].artist.to_lowercase() + &playlist_data(&self.all_songs[idx].path);
         }
     }
-
+    pub fn set_playlist(&mut self, index_in_filtered: usize, playlist: &String) {
+        if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
+            return;
+        }
+        let idx = self.filtered_songs[index_in_filtered];
+        if addto_playlist(&self.all_songs[idx].path, playlist).is_ok() {
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + 
+                                    &self.all_songs[idx].artist.to_lowercase() + &playlist.to_string().to_lowercase();
+        }
+    }
     pub fn search(&mut self, pattern: &String) {
         if pattern == "false" || pattern.is_empty() {
             self.filtered_songs = (0..self.all_songs.len()).collect();

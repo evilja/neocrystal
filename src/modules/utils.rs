@@ -32,13 +32,27 @@ pub fn artist_data(filepath: &str) -> String {
     match tag {
         Ok(t) => {
             let artist = t.artists().unwrap_or(vec!["Unknown"]).join(", ");
-
             artist
         },
         Err(_) => "Unknown".to_string(),
     }
 }
-
+pub fn playlist_data(filepath: &str) -> String {
+    let tag = id3::Tag::read_from_path(filepath);
+    match tag {
+        Ok(t) => {
+            let artist = t.album().unwrap_or("");
+            artist.to_string()
+        },
+        Err(_) => "".to_string(),
+    }
+}
+pub fn addto_playlist(filepath: &str, new_playlist: &str) -> Result<(), String> {
+    let mut tag = id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    tag.set_album(new_playlist);
+    tag.write_to_path(filepath, id3::Version::Id3v24).map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
+    Ok(())
+}
 pub fn change_artist(filepath: &str, new_artist: &str) -> Result<(), String> {
     let mut tag = id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     tag.set_artist(new_artist);

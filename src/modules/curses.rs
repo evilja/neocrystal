@@ -80,7 +80,7 @@ pub fn redraw(
         if i == fun_index && !desel {
             element.color = 3;
         }
-        if songs.all_songs[*song_index].name == songs.current_name() {
+        if *name == songs.current_name() {
             element.text = format!("{}", element.text); // *
             ui.add(UIElement::new("*".to_string(), element.text.chars().count() as i32 + 3, i as i32 + 1, if songs.stophandler { 4 } else { 1 }), Part::Body);
         } else if songs.is_blacklist(*song_index) {
