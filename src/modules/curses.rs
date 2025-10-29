@@ -51,10 +51,7 @@ pub fn redraw(
         ACS_LRCORNER() // sağ alt köşe
     );
 
-
-    ui.header_elements.clear();
-    ui.body_elements.clear();
-    ui.footer_elements.clear();
+    ui.cycle();
 
     // HEADER — Page indicator
     let page_indicator = format!(
@@ -122,7 +119,7 @@ pub fn redraw(
 
     // FOOTER — Progress bar
     let mut start = maxx / 2 - 7;
-    for i in 0..15 {
+    for _ in 0..15 {
         window.mv(maxy-3, start);
         window.addch(ACS_HLINE());
         start += 1
@@ -130,7 +127,7 @@ pub fn redraw(
     if maxlen != Duration::from_secs(0) {
         let filled = calc(maxlen, fcalc);
         let mut start = maxx / 2 - 7;
-        for i in 0..filled {
+        for _ in 0..filled {
             window.mv(maxy-3, start);
             window.attron(COLOR_PAIR(1));
             window.addch(ACS_HLINE());

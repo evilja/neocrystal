@@ -31,7 +31,7 @@ const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 use pancurses::{Window, COLOR_PAIR};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Action {
     Play(usize, usize),
     Shuffle,
@@ -115,12 +115,22 @@ impl UI {
             footer_elements: vec![],
         }
     }
-
+    pub fn cycle(&mut self) {
+        self.header_elements.clear();
+        self.body_elements.clear();
+        self.footer_elements.clear();
+    }
     pub fn add(&mut self, element: UIElement, to: Part) {
         match to {
-            Part::Header => self.header_elements.push(element),
-            Part::Body => self.body_elements.push(element),
-            Part::Footer => self.footer_elements.push(element),
+            Part::Header => {
+                self.header_elements.push(element);
+            },
+            Part::Body => {
+                self.body_elements.push(element);
+            },
+            Part::Footer => {
+                self.footer_elements.push(element);
+            },
             _ => (),
         }
     }
@@ -162,6 +172,13 @@ impl UI {
         }
     }
 
+}
+
+impl PartialEq for UIElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text && self.x == other.x && self.y == other.y && 
+        self.color == other.color && self.button == other.button && self.action == other.action
+    }
 }
 
 

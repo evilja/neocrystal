@@ -13,7 +13,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
     })
     .persist();
 
-    drpc.on_error(|ctx| {
+    drpc.on_error(|_ctx| {
         ()
     })
     .persist();
@@ -22,6 +22,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
     let mut title: String = "".to_string();
     let mut detai: String = "".to_string();
     let mut ed_ts: (u64, u64) = (0, 0);
+    let mut init: bool = false;
     loop {
         match comm_recv.recv() {
             Ok((x, y)) => {
@@ -29,8 +30,10 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     break;
                 } else if x == "%clear" {
                     let _ = drpc.clear_activity();
+                    init = false;
                     continue;
                 } else if x == "%renew" { 
+                    if !init {continue;}
                     st_ts.1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - y;
                     ed_ts.1 = ed_ts.0 - st_ts.0 + st_ts.1;
                 } else {
@@ -41,6 +44,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     let _ = drpc.clear_activity();
                     st_ts.1 = st_ts.0;
                     ed_ts.1 = ed_ts.0;
+                    init = true;
                 }
                 for _ in 0..=5 {
                     match drpc.set_activity(|act| {
