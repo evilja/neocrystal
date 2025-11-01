@@ -13,6 +13,7 @@ pub struct Song {
     pub path: String,
     pub name: String,
     pub artist: String,
+    pub playlist: String,
     pub searchable: String,
     pub duration: Duration,
     pub forced: bool,
@@ -56,17 +57,19 @@ impl Songs {
         }
 
         for (i, path) in paths.iter().enumerate() {
-            let artist = artist_data(path) + " " + &playlist_data(path);
+            let artist = artist_data(path);
+            let playlist = playlist_data(path);
             let name = path
                 .replace("music/", "")
                 .replace("music\\", "")
                 .replace(".mp3", "");
-            let searchable = format!("{} {}", name.to_lowercase(), artist.to_lowercase());
+            let searchable = format!("{} {} {}", name.to_lowercase(), artist.to_lowercase(), playlist.to_lowercase());
 
             all_songs.push(Song {
                 path: path.clone(),
                 name,
                 artist,
+                playlist,
                 searchable,
                 duration: durations[i],
                 forced: false,
@@ -127,6 +130,12 @@ impl Songs {
             .map(|s| s.artist.clone())
             .unwrap_or("Unknown".to_string())
     }
+    pub fn get_playlist_search(&self) -> String {
+        self.all_songs
+            .get(self.current_index)
+            .map(|s| s.playlist.clone())
+            .unwrap_or("Unknown".to_string())
+    }
 
     pub fn set_artist(&mut self, index_in_filtered: usize, artist: &String) {
         if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
@@ -135,8 +144,7 @@ impl Songs {
         let idx = self.filtered_songs[index_in_filtered];
         if change_artist(&self.all_songs[idx].path, artist).is_ok() {
             self.all_songs[idx].artist = artist.clone();
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + 
-                                    &self.all_songs[idx].artist.to_lowercase() + &playlist_data(&self.all_songs[idx].path);
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + &self.all_songs[idx].artist.to_lowercase() + &self.all_songs[idx].playlist.to_lowercase();
         }
     }
     pub fn set_playlist(&mut self, index_in_filtered: usize, playlist: &String) {
@@ -145,8 +153,7 @@ impl Songs {
         }
         let idx = self.filtered_songs[index_in_filtered];
         if addto_playlist(&self.all_songs[idx].path, playlist).is_ok() {
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + 
-                                    &self.all_songs[idx].artist.to_lowercase() + &playlist.to_string().to_lowercase();
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + &self.all_songs[idx].artist.to_lowercase() + &playlist.to_string().to_lowercase();
         }
     }
     pub fn search(&mut self, pattern: &String) {
@@ -261,9 +268,9 @@ impl Songs {
             if candidate_list.is_empty() {
                 return Err(());
             }
-
+            
             let idx = rng.random_range(0..candidate_list.len());
-            return Ok(candidate_list[idx]);
+            return Ok(candidate_list[idx]); 
         }
 
         // sequential

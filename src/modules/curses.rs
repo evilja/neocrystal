@@ -101,7 +101,7 @@ pub fn redraw(
         window.addch(ACS_HLINE());
     }
     window.addch(ACS_RTEE());
-    ui.add(UIElement::new(sliding, 12, maxy - 4, 1), Part::Footer);
+    ui.add(UIElement::new(sliding.clone(), maxx/2 - sliding.chars().count() as i32/2, maxy - 4, 1), Part::Footer);
 
     // FOOTER — Shuffle / Loop / RPC / Volume
     let shuffle_text = format!("{}", if songs.shuffle { "yes" } else { "no" });
@@ -139,7 +139,9 @@ pub fn redraw(
     ui.add(UIElement::new(to_mm_ss(maxlen), maxx/2 + 9, maxy - 3, 0), Part::Footer);
     {
         let artist_name = songs.get_artist_search();
-        ui.add(UIElement::new(artist_name.clone(), maxx/2 - artist_name.chars().count()as i32 /2, maxy - 2, 0), Part::Footer);
+        ui.add(UIElement::new(artist_name.clone(), maxx/2 - artist_name.chars().count() as i32 /2, maxy - 2, 0), Part::Footer);
+        let playlist_name = songs.get_playlist_search();
+        ui.add(UIElement::new(playlist_name.clone(), 2, maxy - 4, 0), Part::Footer);
     }
 
     // Çizim

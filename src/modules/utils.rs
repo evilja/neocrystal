@@ -103,7 +103,7 @@ impl SlidingText {
             return "Nothing".to_string();
         }
         if len-3 <= self.width {
-            return self.text.clone();
+            return self.text[..self.text.len() - 3].to_string();
         }
         if self.offset + self.width <= len {
             self.text[self.offset..self.offset + self.width].to_string()
