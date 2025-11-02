@@ -1,6 +1,13 @@
 This application is written in Rustlang.
 
+binary:
+
+look up to releases and use the latest one. you need a music/ folder at binary location.
+
+compile:
+
 You need libalsa(-devel) + ncurses from your package manager.
+
 You can compile it with "cargo build" (rust compiler)
 
 Current keybindings: you can change all keybinds to something useless using the consts in crystal_manager.rs
@@ -38,7 +45,10 @@ g -> go to top
 TODO
 
 Progress bar seek / Volume functions with clickable UI
+
 Playlist logic should be handled with folders PLUS metadata
+
+Maybe support for .flac .alac but uhh who needs this shit?
 
 I'M AWARE
 
