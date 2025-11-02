@@ -1,5 +1,6 @@
 This application is written in Rustlang.
 
+You need libalsa(-devel) + ncurses from your package manager.
 You can compile it with "cargo build" (rust compiler)
 
 Current keybindings: you can change all keybinds to something useless using the consts in crystal_manager.rs
@@ -30,11 +31,14 @@ h -> search
 
 c -> change artist name (edit metadata)
 
+v -> change playlist name (edit metadata)
+
 g -> go to top
 
 TODO
 
 Progress bar seek / Volume functions with clickable UI
+Playlist logic should be handled with folders PLUS metadata
 
 I'M AWARE
 
