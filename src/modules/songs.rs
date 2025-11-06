@@ -280,12 +280,12 @@ impl Songs {
                     return Ok(i);
                 }
             }
-            for &i in self.filtered_songs.iter().take(start + 1) {
+            for &i in self.filtered_songs.iter().take(start - 1) {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }
             }
-        } else {
+        } else { // this shit should NEVER run but is there just in case
             for &i in &self.filtered_songs {
                 if !self.blacklist.contains(&i) && i != self.current_index {
                     return Ok(i);

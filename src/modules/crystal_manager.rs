@@ -118,7 +118,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         },
                         Action::PgUp => {
                             if locind.page > 1 {
-                                locind.page = 1;
+                                locind.page -= 1;
                                 locind.index = songs.typical_page_size - 1;
                             } else {
                                 locind.index = 0;
