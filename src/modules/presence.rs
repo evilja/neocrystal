@@ -38,10 +38,9 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                     ed_ts.1 = ed_ts.0 - st_ts.0 + st_ts.1;
                 } else {
                     st_ts.0 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 3;
+                    ed_ts.0 = st_ts.0 + y;
                     title = artist_data(&x);
                     detai = x.replace("music/", "").replace("music\\", "").replace(".mp3", "");
-                    ed_ts.0 = st_ts.0 + y;
-                    let _ = drpc.clear_activity();
                     st_ts.1 = st_ts.0;
                     ed_ts.1 = ed_ts.0;
                     init = true;
