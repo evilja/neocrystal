@@ -231,11 +231,12 @@ impl UI {
                 _ => None,
             } {
                 if target_vec.len() > self._c_index {
-                    for i in &target_vec[self._c_index+1..target_vec.len()] {
+                    for i in &target_vec[self._c_index..target_vec.len()] {
                         self._c_coord_cleanup.push((i.x, i.y, i.length));
                     }
-                }   
-                target_vec.truncate(self._c_index+1);
+                }
+
+                target_vec.truncate(self._c_index);
             }
             self._c_index = 0;
             self._c_section = to;
@@ -289,12 +290,16 @@ impl UI {
                     window.mvaddstr(y, x, &" ".repeat(length as usize));
                 }
             }
-
+            if self._c_redrw_cleanup.iter().any(|(s, _)| *s == Part::Header) {
+                self.draw_const(window);
+                for j in &self.header_elements {
+                    j.draw(window);
+                }
+            }       
             for (section, index) in self._c_redrw_cleanup.drain(..) {
                 if let Some(target) = match section {
-                    Part::Header => Some(&mut self.header_elements),
-                    Part::Body   => Some(&mut self.body_elements),
-                    Part::Footer => Some(&mut self.footer_elements),
+                    Part::Body   => Some(&self.body_elements),
+                    Part::Footer => Some(&self.footer_elements),
                     _ => None, 
                 } {
                     target[index].draw(window);
