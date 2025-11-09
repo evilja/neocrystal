@@ -30,7 +30,6 @@ const CHANGE:       char= 'c';
 const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 const SETPLAYLIST:  char= 'v';
-use pancurses::{Window, COLOR_PAIR};
 
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
@@ -50,9 +49,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                                       });
 
     init_curses(&mut window);
-    let (maxy, maxx)                = window.get_max_yx();
+    ui.draw_const(&mut window);
     loop {
-        redraw(&mut ui, &mut window, maxx, maxy, &songs, locind.page,
+        redraw(&mut ui, &mut window, &songs, locind.page,
                 local_volume_counter.steps, &is_search.query,
                 state.isloop, rpc_state.reinit, loctimer.maxlen, loctimer.fcalc, locind.index, state.desel, local_sliding.visible_text()
             );
@@ -316,152 +315,3 @@ pub fn move_selection(
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum Action {
-    Play(usize, usize),
-    Shuffle,
-    Repeat,
-    Rpc,
-    PgDown,
-    PgUp,
-    Nothing,
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum Part {
-    Header,
-    Body,
-    Footer,
-    _All,
-    _None,
-}
-
-pub struct UIElement {
-    pub text: String,
-    x: i32,
-    y: i32,
-    length: i32,
-    pub color: u64, // color pair for pancurses
-    button: bool,
-    action: Action,
-    displayed: bool,
-}
-
-pub struct UI {
-    pub header_elements: Vec<UIElement>,
-    pub body_elements: Vec<UIElement>,
-    pub footer_elements: Vec<UIElement>,
-}
-
-impl UIElement {
-    pub fn new(text: String, x: i32, y: i32, color: u64) -> Self {
-        Self {
-            text: text.clone(),
-            x,
-            y,
-            length: text.chars().count() as i32,
-            color,
-            button: false,
-            action: Action::Nothing,
-            displayed: true,
-        }
-    }
-    
-    pub fn clickable(text: String, x: i32, y: i32, color: u64, action: Action) -> Self {
-        Self {
-            text: text.clone(),
-            x,
-            y,
-            length: text.chars().count() as i32,
-            color,
-            button: true,
-            action,
-            displayed: true,
-        }
-    }
-    pub fn is_click(&self, x: i32, y: i32) -> bool {
-        x >= self.x && x < self.x + self.length && y == self.y && self.button && self.displayed
-    }
-
-    fn draw(&self, window: &Window) {
-        if self.displayed {
-            window.attron(COLOR_PAIR(self.color as u32));
-            window.mvaddstr(self.y as i32, self.x as i32, &self.text);
-            window.attroff(COLOR_PAIR(self.color as u32));
-        }
-    }
-}
-
-impl UI {
-    pub fn new() -> Self {
-        Self {
-            header_elements: vec![],
-            body_elements: vec![],
-            footer_elements: vec![],
-        }
-    }
-    pub fn cycle(&mut self) {
-        self.header_elements.clear();
-        self.body_elements.clear();
-        self.footer_elements.clear();
-    }
-    pub fn add(&mut self, element: UIElement, to: Part) {
-        match to {
-            Part::Header => {
-                self.header_elements.push(element);
-            },
-            Part::Body => {
-                self.body_elements.push(element);
-            },
-            Part::Footer => {
-                self.footer_elements.push(element);
-            },
-            _ => (),
-        }
-    }
-
-    pub fn click(&self, x: i32, y: i32) -> Action {
-        for i in &self.header_elements {
-            if i.is_click(x, y) {
-                return i.action;
-            }
-        }
-        for i in &self.body_elements {
-            if i.is_click(x, y) {
-                return i.action;
-            }
-        }
-        for i in &self.footer_elements {
-            if i.is_click(x, y) {
-                return i.action;
-            }
-        }
-        Action::Nothing
-    }
-
-    pub fn draw_header(&self, window: &Window) {
-        for element in &self.header_elements {
-            element.draw(window);
-        }
-    }
-
-    pub fn draw_body(&self, window: &Window) {
-        for element in &self.body_elements {
-            element.draw(window);
-        }
-    }
-
-    pub fn draw_footer(&self, window: &Window) {
-        for element in &self.footer_elements {
-            element.draw(window);
-        }
-    }
-
-}
-
-impl PartialEq for UIElement {
-    fn eq(&self, other: &Self) -> bool {
-        self.text == other.text && self.x == other.x && self.y == other.y && 
-        self.color == other.color && self.button == other.button && self.action == other.action
-    }
-}
