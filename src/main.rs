@@ -20,7 +20,7 @@ fn main() { // establish communications and threads, then give the job to crysta
                 ()
             },
             Err(e) => {
-                eprintln!("Error in audio playback: {}", e);
+                ()
             }
         }
     });
@@ -41,7 +41,7 @@ fn main() { // establish communications and threads, then give the job to crysta
             Err(_) => (),
         }
         if found_val.0 {
-            if found_val.1 - Instant::now() <= Duration::ZERO {
+            if found_val.1 <= Instant::now() {
                 comm_tx.send(("turn", Duration::ZERO)).unwrap();
                 found_val = (false, Instant::now());
                 continue;

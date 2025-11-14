@@ -49,6 +49,8 @@ impl PlaybackError {
         if self.pre > Instant::now() - Duration::from_secs(10) {
             if self.rep == self.mrp { self.rep = 0; }
             self.rep += 1;
+        } else {
+            self.pre = Instant::now();
         }
         if self.rep == self.mrp {
             return true
@@ -62,7 +64,7 @@ impl PlaybackError {
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
     let mut locind                  = Indexer { page: 1, index: 0 };
-    let mut loctimer                = Timer { fcalc: Duration::from_secs(0), maxlen: Duration::from_secs(0) };
+    let mut loctimer                = Timer::new();
     let mut window                  = initscr();
     let mut state                   = State { spint: false, isloop: false, desel: false };
     let mut local_volume_counter    = Volume {steps: 50, step_div: 2};
@@ -88,7 +90,13 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         let key_opt = window.getch().or_else(|| {
             match comm_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(_key) => match _key.0 {
-                    "turn" => Some(Input::KeyF13),
+                    "turn" => {
+                        if !loctimer.validate() { 
+                            None
+                        } else {        
+                            Some(Input::KeyF13)
+                        }
+                    },
                     "duration" => {
                         loctimer.fcalc = _key.1;
                         Some(Input::KeyF14)
@@ -164,9 +172,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     } else if !state.isloop {
                         match songs.set_by_next() {
                             Ok(_) => (),
-                            Err(_) => {
-                                continue;
-                            }
+                            Err(_) => (),
+
                         }
                     }
                     match kill_timer.test() {
@@ -178,6 +185,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                     tx.send(("play_track", songs.current_song_path())).unwrap();
                     loctimer.maxlen = songs.get_duration();
+                    loctimer.fcalc = Duration::ZERO;
+                    loctimer.init();
                     rpc_state.setup(ReinitMode::Init);
                     local_sliding.reset_to(songs.current_name());
                     continue;
@@ -300,7 +309,9 @@ pub fn play_current_song(
 
         loctimer.maxlen = songs.get_duration();
 
-        loctimer.fcalc = Duration::from_secs(0);
+        loctimer.fcalc = Duration::ZERO;
+
+        loctimer.init();
 
         local_sliding.reset_to(songs.current_name());
     }

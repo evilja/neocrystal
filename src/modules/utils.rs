@@ -137,6 +137,30 @@ pub enum ReinitMode {
 pub struct Timer {
     pub fcalc: Duration,
     pub maxlen: Duration,
+    cache: bool,
+    uinit: Instant,
+}
+impl Timer {
+    pub fn new() -> Self {
+        Self {
+            fcalc: Duration::ZERO,
+            maxlen: Duration::ZERO,
+            cache: false,
+            uinit: Instant::now(),
+        }
+    }
+    pub fn validate(&mut self) -> bool {
+        if self.cache { return self.cache; }
+        if self.uinit + Duration::from_secs(3) <= Instant::now() {
+            self.cache = true;
+            return true
+        }
+        return false
+    }
+    pub fn init(&mut self) {
+        self.uinit = Instant::now();
+        self.cache = false;
+    }
 }
 pub struct State {
     pub spint: bool,
