@@ -134,7 +134,7 @@ impl Songs {
         self.all_songs
             .get(self.current_index)
             .map(|s| s.playlist.clone())
-            .unwrap_or("Unknown".to_string())
+            .unwrap_or("".to_string())
     }
 
     pub fn set_artist(&mut self, index_in_filtered: usize, artist: &String) {
@@ -153,6 +153,7 @@ impl Songs {
         }
         let idx = self.filtered_songs[index_in_filtered];
         if addto_playlist(&self.all_songs[idx].path, playlist).is_ok() {
+            self.all_songs[idx].playlist = playlist.clone();
             self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + &self.all_songs[idx].artist.to_lowercase() + &playlist.to_string().to_lowercase();
         }
     }

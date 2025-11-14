@@ -31,6 +31,34 @@ const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 const SETPLAYLIST:  char= 'v';
 
+
+pub struct PlaybackError {
+    pub pre: Instant,
+    pub rep: u16,
+    pub mrp: u16,
+}
+impl PlaybackError {
+    pub fn constructor(mrp: u16) -> Self {
+        Self {
+            pre: Instant::now(),
+            rep: 0,
+            mrp,
+        }
+    }
+    pub fn test(&mut self) -> bool {
+        if self.pre > Instant::now() - Duration::from_secs(10) {
+            if self.rep == self.mrp { self.rep = 0; }
+            self.rep += 1;
+        }
+        if self.rep == self.mrp {
+            return true
+        }
+        return false
+        
+    }
+
+}
+
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
     let mut locind                  = Indexer { page: 1, index: 0 };
@@ -40,6 +68,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut local_volume_counter    = Volume {steps: 50, step_div: 2};
     let mut ui                      = UI::new();
     let mut action                  = Action::Nothing;
+    let mut kill_timer              = PlaybackError::constructor(6);
     let mut rpc_state               = RpcState {reinit: false, timer: Instant::now(), mode: ReinitMode::None};
     let mut local_sliding           = SlidingText::new("Nothing", 27, Duration::from_millis(300));
     let mut is_search               = SearchQuery { mode: 0, query: String::from("false") };
@@ -53,7 +82,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     loop {
         redraw(&mut ui, &mut window, &songs, locind.page,
                 local_volume_counter.steps, &is_search.query,
-                state.isloop, rpc_state.reinit, loctimer.maxlen, loctimer.fcalc, locind.index, state.desel, local_sliding.visible_text()
+                state.isloop, rpc_state.reinit, loctimer.maxlen, loctimer.fcalc, 
+                locind.index, state.desel, local_sliding.visible_text()
             );
         let key_opt = window.getch().or_else(|| {
             match comm_rx.recv_timeout(Duration::from_millis(10)) {
@@ -138,6 +168,12 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                                 continue;
                             }
                         }
+                    }
+                    match kill_timer.test() {
+                        true => {
+                              play_current_song(&locind, &mut songs, &tx, &mut loctimer, &mut local_sliding);
+                        },
+                        false => (),
                     }
 
                     tx.send(("play_track", songs.current_song_path())).unwrap();

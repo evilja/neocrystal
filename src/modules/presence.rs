@@ -55,7 +55,7 @@ pub fn rpc_handler(comm_recv: Receiver<(String, u64)>) {
                             ass
                                 .small_image("github")
                                 .small_text("github.com/evilja/neo-crystal-plus")
-                                .large_image("default")
+                                .large_image("001")
                                 .large_text("Crystal+ by Myisha")
                         })
                         .timestamps(|ts| {

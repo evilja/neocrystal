@@ -1,10 +1,30 @@
 use pancurses::{Window, mousemask,ACS_VLINE,ACS_HLINE,ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, COLOR_PAIR};
 use std::time::Duration;
+
 use super::songs::Songs;
 use std::ffi::CString;
 use libc::{setlocale, LC_ALL};
 const MAXX: i32 = 50;
 const MAXY: i32 = 20;
+
+
+#[cfg(target_os = "windows")]
+type ColorIntegerSize = u64;
+
+#[cfg(not(target_os = "windows"))]
+type ColorIntegerSize = u32;
+
+
+
+
+
+
+
+
+
+
+
+
 pub fn init_locale() {
     unsafe {
         let locale = CString::new("en_US.UTF-8").unwrap();
@@ -193,9 +213,9 @@ impl UIElement {
     }
 
     fn draw(&self, window: &Window) {
-        window.attron(COLOR_PAIR(self.color as u32));
+        window.attron(COLOR_PAIR(self.color as ColorIntegerSize));
         window.mvaddstr(self.y as i32, self.x as i32, &self.text);
-        window.attroff(COLOR_PAIR(self.color as u32));
+        window.attroff(COLOR_PAIR(self.color as ColorIntegerSize));
     }
 }
 pub struct UI {
