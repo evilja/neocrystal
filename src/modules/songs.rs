@@ -36,7 +36,7 @@ pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> us
 }
 
 impl Songs {
-    pub fn constructor(paths: Vec<String>) -> Self {
+    pub fn constructor(paths: Vec<String>, prefix: String) -> Self {
         let mut all_songs = Vec::with_capacity(paths.len());
         let mut durations = vec![Duration::from_secs(0); paths.len()];
         let mut handles = Vec::new();
@@ -59,10 +59,14 @@ impl Songs {
         for (i, path) in paths.iter().enumerate() {
             let artist = artist_data(path);
             let playlist = playlist_data(path);
-            let name = path
-                .replace("music/", "")
-                .replace("music\\", "")
-                .replace(".mp3", "");
+            let name = Path::new(&path)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+
+
             let searchable = format!("{} {} {}", name.to_lowercase(), artist.to_lowercase(), playlist.to_lowercase());
 
             all_songs.push(Song {

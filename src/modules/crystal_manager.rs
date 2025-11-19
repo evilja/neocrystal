@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use std::sync::mpsc::{self, Receiver, Sender};
 use pancurses::{initscr, Input};
 use glob::glob;
-
+use home::home_dir;
 use super::{songs::{Songs, absolute_index}, 
             presence::rpc_handler, 
             curses::*, 
@@ -30,7 +30,6 @@ const CHANGE:       char= 'c';
 const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 const SETPLAYLIST:  char= 'v';
-
 
 pub struct PlaybackError {
     pub pre: Instant,
@@ -74,7 +73,19 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut rpc_state               = RpcState {reinit: false, timer: Instant::now(), mode: ReinitMode::None};
     let mut local_sliding           = SlidingText::new("Nothing", 27, Duration::from_millis(300));
     let mut is_search               = SearchQuery { mode: 0, query: String::from("false") };
-    let mut songs                   = Songs::constructor(glob("music/*.mp3").unwrap().filter_map(Result::ok).map(|p| p.display().to_string()).collect::<Vec<String>>());
+    let homedir                     = home_dir().expect("No home directory found").join("Music").join("*.mp3").to_string_lossy().to_string();
+    let mut songs                   = Songs::constructor(
+        glob(&homedir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|p| 
+            p.display()
+            .to_string())
+        .collect::<Vec<String>>(),
+        homedir
+
+
+        );
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
                                       });
