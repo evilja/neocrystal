@@ -154,6 +154,13 @@ pub fn init_curses(window: &mut Window) {
     );
 }
 
+pub fn exit_curses(window: &mut Window) {
+    pancurses::curs_set(1);
+    pancurses::echo();
+    window.nodelay(false);
+    pancurses::endwin();
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Action {
     Play(usize, usize),

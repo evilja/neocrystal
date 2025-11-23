@@ -31,35 +31,6 @@ const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 const SETPLAYLIST:  char= 'v';
 
-pub struct PlaybackError {
-    pub pre: Instant,
-    pub rep: u16,
-    pub mrp: u16,
-}
-impl PlaybackError {
-    pub fn constructor(mrp: u16) -> Self {
-        Self {
-            pre: Instant::now(),
-            rep: 0,
-            mrp,
-        }
-    }
-    pub fn test(&mut self) -> bool {
-        if self.pre > Instant::now() - Duration::from_secs(10) {
-            if self.rep == self.mrp { self.rep = 0; }
-            self.rep += 1;
-        } else {
-            self.pre = Instant::now();
-        }
-        if self.rep == self.mrp {
-            return true
-        }
-        return false
-        
-    }
-
-}
-
 pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
     let (rpctx, rpcrx): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel();
     let mut locind                  = Indexer { page: 1, index: 0 };
@@ -69,9 +40,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
     let mut local_volume_counter    = Volume {steps: 50, step_div: 2};
     let mut ui                      = UI::new();
     let mut action                  = Action::Nothing;
-    let mut kill_timer              = PlaybackError::constructor(6);
     let mut rpc_state               = RpcState {reinit: false, timer: Instant::now(), mode: ReinitMode::None};
-    let mut local_sliding           = SlidingText::new("Nothing", 27, Duration::from_millis(300));
+    let mut local_sliding           = SlidingText::new("Nothing", 23, Duration::from_millis(300));
     let mut is_search               = SearchQuery { mode: 0, query: String::from("false") };
     let homedir                     = home_dir().expect("No home directory found").join("Music").join("*.mp3").to_string_lossy().to_string();
     let mut songs                   = Songs::constructor(
@@ -81,11 +51,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
         .map(|p| 
             p.display()
             .to_string())
-        .collect::<Vec<String>>(),
-        homedir
-
-
-        );
+        .collect::<Vec<String>>()
+    );
     let _rpc_thread                 = thread::spawn(move || {
                                         rpc_handler(rpcrx);
                                       });
@@ -187,13 +154,8 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                         }
                     }
-                    match kill_timer.test() {
-                        true => {
-                              play_current_song(&locind, &mut songs, &tx, &mut loctimer, &mut local_sliding);
-                        },
-                        false => (),
-                    }
 
+                    play_current_song(&locind, &mut songs, &tx, &mut loctimer, &mut local_sliding);
                     tx.send(("play_track", songs.current_song_path())).unwrap();
                     loctimer.maxlen = songs.get_duration();
                     loctimer.fcalc = Duration::ZERO;
@@ -207,7 +169,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         match rpc_state.mode {
                             ReinitMode::None => continue,
                             ReinitMode::Renew => { let _ = rpctx.send(("%renew".to_string(), loctimer.maxlen.checked_sub(loctimer.fcalc).unwrap_or_default().as_secs())); },
-                            ReinitMode::Init => { let _ = rpctx.send((songs.current_song_path().to_string(), loctimer.maxlen.as_secs_f32() as u64)); },
+                            ReinitMode::Init => { let _ = rpctx.send((songs.current_name().to_string(), loctimer.maxlen.as_secs_f32() as u64)); },
                         }
                         rpc_state.reset();
                     }
@@ -303,6 +265,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
     }
     match rpctx.send(("%stop".to_string(), 0)) { _ => () }
+    exit_curses(&mut window);
     true
 }
 

@@ -19,7 +19,7 @@ fn main() { // establish communications and threads, then give the job to crysta
             Ok(_) => {
                 ()
             },
-            Err(e) => {
+            Err(_) => {
                 ()
             }
         }

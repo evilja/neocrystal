@@ -36,7 +36,7 @@ pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> us
 }
 
 impl Songs {
-    pub fn constructor(paths: Vec<String>, prefix: String) -> Self {
+    pub fn constructor(paths: Vec<String>) -> Self {
         let mut all_songs = Vec::with_capacity(paths.len());
         let mut durations = vec![Duration::from_secs(0); paths.len()];
         let mut handles = Vec::new();

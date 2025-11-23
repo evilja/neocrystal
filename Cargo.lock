@@ -181,21 +181,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
-name = "crystal_plus"
-version = "1.3.0"
-dependencies = [
- "discord-presence",
- "glob",
- "home",
- "id3",
- "libc",
- "mp3-duration",
- "pancurses",
- "rand",
- "rodio",
-]
-
-[[package]]
 name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -462,6 +447,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys",
+]
+
+[[package]]
+name = "neocrystal"
+version = "1.4.0"
+dependencies = [
+ "discord-presence",
+ "glob",
+ "home",
+ "id3",
+ "libc",
+ "mp3-duration",
+ "pancurses",
+ "rand",
+ "rodio",
 ]
 
 [[package]]
