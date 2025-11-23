@@ -155,7 +155,6 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         }
                     }
 
-                    play_current_song(&locind, &mut songs, &tx, &mut loctimer, &mut local_sliding);
                     tx.send(("play_track", songs.current_song_path())).unwrap();
                     loctimer.maxlen = songs.get_duration();
                     loctimer.fcalc = Duration::ZERO;
