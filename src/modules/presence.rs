@@ -75,12 +75,12 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
                     match drpc.set_activity(|act| {
                         act
                             .activity_type(ActivityType::Listening)
-                            .state(&plist)
+                            .state(&title)
                             .details(&detai)
                             .assets(|ass| {
                                 ass
                                     .large_image("001")
-                                    .large_text(&title)
+                                    .large_text(&plist)
                                     .small_image("github")
                                     .small_text("github.com/evilja/neo-crystal-plus")
                             })
