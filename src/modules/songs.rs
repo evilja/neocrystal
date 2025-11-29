@@ -93,6 +93,39 @@ impl Songs {
             setnext: usize::MAX,
         }
     }
+    pub fn current_artist(&self) -> String {
+        if self.stophandler {
+            return "Nothing".to_string();
+        }
+
+        self.all_songs
+            .get(self.current_index)
+            .map(|s| s.artist.clone())
+            .unwrap_or("Nothing".to_string())
+
+    }
+
+    pub fn current_playlist(&self) -> String {
+        if self.stophandler {
+            return "it's not playing. this is a bug.".to_string()
+        }
+
+        match self.all_songs
+            .get(self.current_index)
+            .map(|s| s.playlist.clone()) {
+                Some(something) => {
+                    if something == "" {
+                        "No playlist".to_string()
+                    } else {
+                        something
+                    }
+
+                },
+                None => "No playlist".to_string(),
+
+            }
+
+    }
 
     pub fn current_song_path(&self) -> String {
         if self.stophandler {

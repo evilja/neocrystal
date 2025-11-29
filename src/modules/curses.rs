@@ -14,17 +14,6 @@ type ColorIntegerSize = u64;
 #[cfg(not(target_os = "windows"))]
 type ColorIntegerSize = u32;
 
-
-
-
-
-
-
-
-
-
-
-
 pub fn init_locale() {
     unsafe {
         let locale = CString::new("en_US.UTF-8").unwrap();
