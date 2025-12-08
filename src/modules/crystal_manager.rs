@@ -272,8 +272,6 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
             }
             
         }
-        
-
     }
     match rpctx.send(RpcCommand::Stop) { _ => () }
     exit_curses(&mut window);

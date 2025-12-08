@@ -1,3 +1,4 @@
+use std::thread;
 use std::time::{Duration};
 use std::fs::File;
 use std::io::BufReader;
@@ -28,7 +29,7 @@ pub fn play_audio(receiver: Receiver<AudioCommand>, transmitter: Sender<AudioRep
     let mut cached: String              = "uinit".to_string();
     let mut cached_duration: Duration   = Duration::ZERO;
     loop {
-        if let Ok(ac_command) = receiver.recv_timeout(Duration::from_millis(300)) {
+        if let Ok(ac_command) = receiver.recv_timeout(Duration::from_millis(200)) {
             match ac_command {
                 AudioCommand::Pause => {
                     sink.pause();
@@ -39,7 +40,7 @@ pub fn play_audio(receiver: Receiver<AudioCommand>, transmitter: Sender<AudioRep
                         continue;
                     }
                     sink.play();
-                    match transmitter.send(AudioReportAction::Duration(cached.clone(), cached_duration - sink.get_pos())) {
+                    match transmitter.send(AudioReportAction::Duration(cached.clone(), duration_autobuild(cached_duration, sink.get_pos()))) {
                         Ok(()) => (),
                         Err(_) => (),
                     }
@@ -94,10 +95,20 @@ pub fn play_audio(receiver: Receiver<AudioCommand>, transmitter: Sender<AudioRep
         if cached == "uinit".to_string() || sink.is_paused() {
             continue;
         }
-        match transmitter.send(AudioReportAction::Duration(cached.clone(), cached_duration - sink.get_pos())) {
+        thread::sleep(Duration::from_millis(100));
+        match transmitter.send(AudioReportAction::Duration(cached.clone(), duration_autobuild(cached_duration, sink.get_pos()))) {
             Ok(()) => (),
             Err(_) => (),
         }
     }
     Ok("Stopped".to_string())
 }
+
+
+fn duration_autobuild(cached: Duration, pos: Duration) -> Duration {
+    if pos >= cached {
+        return Duration::ZERO;
+    }
+    cached - pos
+
+} 
