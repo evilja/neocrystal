@@ -7,6 +7,7 @@ use pancurses::{initscr, Input};
 use glob::glob;
 use home::home_dir;
 use crate::modules::presence::rpc_init_autobuild;
+use crate::modules::audio::{AudioCommand, AudioReportAction};
 
 use super::{songs::{Songs, absolute_index}, 
             presence::{rpc_handler, RpcCommand}, 
@@ -33,7 +34,7 @@ const SETNEXT:      char= 'e';
 const DESEL:        char= 'd';
 const SETPLAYLIST:  char= 'v';
 
-pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'static str, Duration)>) -> bool {
+pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAction>) -> bool {
     let (rpctx, rpcrx): (Sender<RpcCommand>, Receiver<RpcCommand>) = mpsc::channel();
     let mut locind                  = Indexer { page: 1, index: 0 };
     let mut loctimer                  = Timer::new();
@@ -69,17 +70,18 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
             );
         let key_opt = window.getch().or_else(|| {
             match comm_rx.recv_timeout(Duration::from_millis(10)) {
-                Ok(_key) => match _key.0 {
-                    "turn" => {
-                        if !loctimer.validate() { 
-                            None
-                        } else {        
-                            Some(Input::KeyF13)
+                Ok(_key) => match _key {
+                    AudioReportAction::Duration(name, time) => {
+                        if name == songs.current_song_path() {
+                            loctimer.fcalc = time;
+                            if loctimer.fcalc <= Duration::from_millis(100) {
+                                Some(Input::KeyF13)
+                            } else {
+                                Some(Input::KeyF14)
+                            }
+                        } else {
+                            Some(Input::KeyF15)
                         }
-                    },
-                    "duration" => {
-                        loctimer.fcalc = _key.1;
-                        Some(Input::KeyF14)
                     },
                     _ => Some(Input::KeyF15),
                 },
@@ -157,10 +159,9 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         }
                     }
 
-                    tx.send(("play_track", songs.current_song_path())).unwrap();
+                    tx.send(AudioCommand::Play(songs.current_song_path())).unwrap();
                     loctimer.maxlen = songs.get_duration();
-                    loctimer.fcalc = Duration::ZERO;
-                    loctimer.init();
+                    loctimer.fcalc = loctimer.maxlen;
                     rpc_state.setup(ReinitMode::Init);
                     local_sliding.reset_to(songs.current_name());
                     continue;
@@ -182,7 +183,10 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                     }
                     continue;
                 },
-                Input::Character(QUIT) => break,
+                Input::Character(QUIT) => {
+                    tx.send(AudioCommand::Stop).unwrap();
+                    break;
+                },
 
                 Input::KeyDown | Input::Character(DOWN) => {
                     move_selection(Direction::Down, &mut locind, &state, &songs, &mut local_volume_counter, &tx);
@@ -212,7 +216,7 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 
                 Input::Character(STOP) => {
                     songs.stop();
-                    tx.send(("pause", String::new())).unwrap();
+                    tx.send(AudioCommand::Pause).unwrap();
                     rpctx.send(RpcCommand::Clear).unwrap();
                     continue;
                 },
@@ -227,17 +231,17 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
                         continue;
                     }
                     songs.stophandler = false;
-                    tx.send(("resume", String::new())).unwrap();
+                    tx.send(AudioCommand::Resume).unwrap();
                     continue;
                 },
                 Input::KeyRight | Input::Character(RIGHT) => {
-                    tx.send(("forward", String::new())).unwrap();
+                    tx.send(AudioCommand::SeekForward).unwrap();
                     rpc_state.setup(ReinitMode::Renew);
                     continue;
 
                 },
                 Input::KeyLeft | Input::Character(LEFT) => {
-                    tx.send(("back", String::new())).unwrap();
+                    tx.send(AudioCommand::SeekBackward).unwrap();
                     rpc_state.setup(ReinitMode::Renew);
                     continue; 
                 },
@@ -279,20 +283,19 @@ pub fn crystal_manager(tx: Sender<(&'static str, String)>, comm_rx: Receiver<(&'
 pub fn play_current_song(
     locind: &Indexer,
     songs: &mut Songs,
-    tx: &Sender<(&'static str, String)>,
+    tx: &Sender<AudioCommand>,
     loctimer: &mut Timer,
     local_sliding: &mut SlidingText,
 ) {
     if songs.set_by_pindex(locind.index, locind.page) != Err(0) {
-        if tx.send(("play_track", songs.current_song_path())).is_err() {
+        if tx.send(AudioCommand::Play(songs.current_song_path())).is_err() {
             return;
         }
 
         loctimer.maxlen = songs.get_duration();
 
-        loctimer.fcalc = Duration::ZERO;
+        loctimer.fcalc = loctimer.maxlen;
 
-        loctimer.init();
 
         local_sliding.reset_to(songs.current_name());
     }
@@ -309,14 +312,14 @@ pub fn move_selection(
     state: &State,
     songs: &Songs,
     local_volume_counter: &mut Volume,
-    tx: &Sender<(&'static str, String)>
+    tx: &Sender<AudioCommand>
 ) {
     if state.spint {
         match direction {
             Direction::Up => local_volume_counter.step_up(),
             Direction::Down => local_volume_counter.step_down(),
         }
-        tx.send(("set_volume", local_volume_counter.as_f32().to_string()))
+        tx.send(AudioCommand::SetVolume(local_volume_counter.as_f32()))
             .unwrap_or_else(|_| ());
     } else {
         match direction {

@@ -115,7 +115,10 @@ pub fn redraw(
     {
         let artist_name = songs.get_artist_search();
         ui.add(UIElement::new(artist_name.clone(), MAXX/2 - artist_name.chars().count() as i32 /2, MAXY - 2, 0));
-        let playlist_name = songs.get_playlist_search();
+        let mut playlist_name = songs.get_playlist_search();
+        if playlist_name.len() > 12 {
+            playlist_name = playlist_name[..12].to_string();
+        }
         ui.add(UIElement::new(playlist_name.clone(), 2, MAXY - 4, 0));
     }
 
