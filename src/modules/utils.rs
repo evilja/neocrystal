@@ -1,6 +1,5 @@
 use id3::TagLike;
 
-
 pub struct Volume {
     pub steps: u8,
     pub step_div: u8,
@@ -23,9 +22,7 @@ impl Volume {
     pub fn as_f32(&self) -> f32 {
         self.steps as f32 / 100 as f32
     }
-
 }
-
 
 pub fn artist_data(filepath: &str) -> String {
     let tag = id3::Tag::read_from_path(filepath);
@@ -33,7 +30,7 @@ pub fn artist_data(filepath: &str) -> String {
         Ok(t) => {
             let artist = t.artists().unwrap_or(vec!["Unknown"]).join(", ");
             artist
-        },
+        }
         Err(_) => "Unknown".to_string(),
     }
 }
@@ -43,20 +40,24 @@ pub fn playlist_data(filepath: &str) -> String {
         Ok(t) => {
             let artist = t.album().unwrap_or("");
             artist.to_string()
-        },
+        }
         Err(_) => "".to_string(),
     }
 }
 pub fn addto_playlist(filepath: &str, new_playlist: &str) -> Result<(), String> {
-    let mut tag = id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    let mut tag =
+        id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     tag.set_album(new_playlist);
-    tag.write_to_path(filepath, id3::Version::Id3v24).map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
+    tag.write_to_path(filepath, id3::Version::Id3v24)
+        .map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
     Ok(())
 }
 pub fn change_artist(filepath: &str, new_artist: &str) -> Result<(), String> {
-    let mut tag = id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    let mut tag =
+        id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     tag.set_artist(new_artist);
-    tag.write_to_path(filepath, id3::Version::Id3v24).map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
+    tag.write_to_path(filepath, id3::Version::Id3v24)
+        .map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
     Ok(())
 }
 
@@ -102,7 +103,7 @@ impl SlidingText {
         if self.text == "Nothing   ".to_string() {
             return "Nothing".to_string();
         }
-        if len-3 <= self.width {
+        if len - 3 <= self.width {
             return self.text[..self.text.len() - 3].to_string();
         }
         if self.offset + self.width <= len {
@@ -160,7 +161,6 @@ pub struct Indexer {
     pub page: usize,
     pub index: usize,
 }
-
 
 impl RpcState {
     pub fn setup(&mut self, mode: ReinitMode) {

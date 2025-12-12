@@ -1,12 +1,14 @@
-use pancurses::{Window, mousemask,ACS_VLINE,ACS_HLINE,ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, COLOR_PAIR};
+use pancurses::{
+    mousemask, Window, ACS_HLINE, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, ACS_ULCORNER,
+    ACS_URCORNER, ACS_VLINE, COLOR_PAIR,
+};
 use std::time::Duration;
 
 use super::songs::Songs;
-use std::ffi::CString;
 use libc::{setlocale, LC_ALL};
+use std::ffi::CString;
 const MAXX: i32 = 50;
 const MAXY: i32 = 20;
-
 
 #[cfg(target_os = "windows")]
 type ColorIntegerSize = u64;
@@ -23,12 +25,18 @@ pub fn init_locale() {
 
 #[inline]
 pub fn calc(maxlen: Duration, curr: Duration) -> usize {
-    ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64)).clamp(0.0, 15.0).round() as usize
+    ((maxlen.as_secs_f64() - curr.as_secs_f64()) / (maxlen.as_secs_f64() / 15_f64))
+        .clamp(0.0, 15.0)
+        .round() as usize
 }
 
 #[inline]
 pub fn to_mm_ss(duration: Duration) -> String {
-    format!("{:02}:{:02}", duration.as_secs() / 60, duration.as_secs() % 60)
+    format!(
+        "{:02}:{:02}",
+        duration.as_secs() / 60,
+        duration.as_secs() % 60
+    )
 }
 
 pub fn redraw(
@@ -46,16 +54,32 @@ pub fn redraw(
     desel: bool,
     sliding: String,
 ) {
-
     // HEADER — Page indicator
     let page_indicator = format!(
         "Page {}/{}",
         page,
         (songs.filtered_songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize
     );
-    ui.add(UIElement::new(page_indicator.clone(), MAXX - 3 - page_indicator.len() as i32, 0, 0));
-    ui.add(UIElement::clickable("< ".to_string(), MAXX - 5 - page_indicator.len() as i32, 0, 0, Action::PgUp));
-    ui.add(UIElement::clickable(" >".to_string(), MAXX - 3, 0, 0, Action::PgDown));
+    ui.add(UIElement::new(
+        page_indicator.clone(),
+        MAXX - 3 - page_indicator.len() as i32,
+        0,
+        0,
+    ));
+    ui.add(UIElement::clickable(
+        "< ".to_string(),
+        MAXX - 5 - page_indicator.len() as i32,
+        0,
+        0,
+        Action::PgUp,
+    ));
+    ui.add(UIElement::clickable(
+        " >".to_string(),
+        MAXX - 3,
+        0,
+        0,
+        Action::PgDown,
+    ));
     // HEADER — Search bar
     let search_text = if is_search != "false" {
         format!("Input: {}", is_search)
@@ -67,33 +91,58 @@ pub fn redraw(
     ui.cycle(Part::Body);
     // BODY — Şarkı listesi
     let start_index = (page - 1) * songs.typical_page_size;
-    let end_index = std::cmp::min(start_index + songs.typical_page_size, songs.filtered_songs.len());
-    for (i, song_index) in songs.filtered_songs[start_index..end_index].iter().enumerate() {
+    let end_index = std::cmp::min(
+        start_index + songs.typical_page_size,
+        songs.filtered_songs.len(),
+    );
+    for (i, song_index) in songs.filtered_songs[start_index..end_index]
+        .iter()
+        .enumerate()
+    {
         let name = &songs.all_songs[*song_index].name;
-        let mut element = UIElement::clickable(name.to_string(), 2, i as i32 + 1, 0, Action::Play(page, i));
+        let mut element =
+            UIElement::clickable(name.to_string(), 2, i as i32 + 1, 0, Action::Play(page, i));
 
         if i == fun_index && !desel {
             element.color = 3;
         }
         if *name == songs.current_name() {
             element.text = format!("{}", element.text); // *
-            ui.add(UIElement::new("*".to_string(), element.text.chars().count() as i32 + 3, i as i32 + 1, if songs.stophandler { 4 } else { 1 }));
+            ui.add(UIElement::new(
+                "*".to_string(),
+                element.text.chars().count() as i32 + 3,
+                i as i32 + 1,
+                if songs.stophandler { 4 } else { 1 },
+            ));
         } else if songs.is_blacklist(*song_index) {
             element.text = format!("{}", element.text); // bl
-            ui.add(UIElement::new("BL".to_string(), element.text.chars().count() as i32 + 3, i as i32 + 1, 2));
+            ui.add(UIElement::new(
+                "BL".to_string(),
+                element.text.chars().count() as i32 + 3,
+                i as i32 + 1,
+                2,
+            ));
         } else if *song_index == songs.get_next() {
             element.text = format!("{}", element.text); // next
-            ui.add(UIElement::new("-".to_string(), element.text.chars().count() as i32 + 3, i as i32 + 1, 4));
+            ui.add(UIElement::new(
+                "-".to_string(),
+                element.text.chars().count() as i32 + 3,
+                i as i32 + 1,
+                4,
+            ));
         }
 
         ui.add(element);
     }
 
-
     ui.cycle(Part::Footer);
 
-
-    ui.add(UIElement::new(sliding.clone(), MAXX/2 - sliding.chars().count() as i32/2, MAXY - 4, 1));
+    ui.add(UIElement::new(
+        sliding.clone(),
+        MAXX / 2 - sliding.chars().count() as i32 / 2,
+        MAXY - 4,
+        1,
+    ));
 
     // FOOTER — Shuffle / Loop / RPC / Volume
     let shuffle_text = format!("{}", if songs.shuffle { "yes" } else { "no" });
@@ -104,17 +153,50 @@ pub fn redraw(
     ui.add(UIElement::new("Rep".to_string(), 7, MAXY - 3, 0));
     ui.add(UIElement::new("Rpc".to_string(), MAXX - 9, MAXY - 3, 0));
     ui.add(UIElement::new("Vol".to_string(), MAXX - 5, MAXY - 3, 0));
-    ui.add(UIElement::clickable(shuffle_text, 2, MAXY - 2, if songs.shuffle { 1 } else { 2 }, Action::Shuffle));
-    ui.add(UIElement::clickable(loop_text, 7, MAXY - 2, if isloop { 1 } else { 2 }, Action::Repeat));
-    ui.add(UIElement::clickable(rpc_text, MAXX - 9, MAXY - 2, if reinit_rpc { 2 } else { 1 }, Action::Rpc));
-    ui.add(UIElement::new(format!("{}", local_volume_counter), MAXX - ((format!("{} ", local_volume_counter)).len() as i32 + 1), MAXY - 2, 0));
+    ui.add(UIElement::clickable(
+        shuffle_text,
+        2,
+        MAXY - 2,
+        if songs.shuffle { 1 } else { 2 },
+        Action::Shuffle,
+    ));
+    ui.add(UIElement::clickable(
+        loop_text,
+        7,
+        MAXY - 2,
+        if isloop { 1 } else { 2 },
+        Action::Repeat,
+    ));
+    ui.add(UIElement::clickable(
+        rpc_text,
+        MAXX - 9,
+        MAXY - 2,
+        if reinit_rpc { 2 } else { 1 },
+        Action::Rpc,
+    ));
+    ui.add(UIElement::new(
+        format!("{}", local_volume_counter),
+        MAXX - ((format!("{} ", local_volume_counter)).len() as i32 + 1),
+        MAXY - 2,
+        0,
+    ));
 
     // FOOTER — Progress bar
-    ui.add(UIElement::new(to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()), MAXX/2 - 13, MAXY - 3, 0));
-    ui.add(UIElement::new(to_mm_ss(maxlen), MAXX/2 + 9, MAXY - 3, 0));
+    ui.add(UIElement::new(
+        to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()),
+        MAXX / 2 - 13,
+        MAXY - 3,
+        0,
+    ));
+    ui.add(UIElement::new(to_mm_ss(maxlen), MAXX / 2 + 9, MAXY - 3, 0));
     {
         let artist_name = songs.get_artist_search();
-        ui.add(UIElement::new(artist_name.clone(), MAXX/2 - artist_name.chars().count() as i32 /2, MAXY - 2, 0));
+        ui.add(UIElement::new(
+            artist_name.clone(),
+            MAXX / 2 - artist_name.chars().count() as i32 / 2,
+            MAXY - 2,
+            0,
+        ));
         let mut playlist_name = songs.get_playlist_search();
         if playlist_name.len() > 12 {
             playlist_name = playlist_name[..12].to_string();
@@ -124,14 +206,18 @@ pub fn redraw(
 
     ui.cycle(Part::Header);
 
-
     // Çizim
     ui.draw_wrapper(window, &maxlen, &fcalc);
 }
 
-
 pub fn init_curses(window: &mut Window) {
-    (pancurses::curs_set(0), window.keypad(true), pancurses::noecho(), window.nodelay(true), mousemask(0x2 as u32, None));
+    (
+        pancurses::curs_set(0),
+        window.keypad(true),
+        pancurses::noecho(),
+        window.nodelay(true),
+        mousemask(0x2 as u32, None),
+    );
     window.resize(20, 50);
     (
         pancurses::start_color(),
@@ -141,8 +227,6 @@ pub fn init_curses(window: &mut Window) {
         pancurses::init_pair(3, pancurses::COLOR_BLACK, pancurses::COLOR_WHITE),
         pancurses::init_pair(4, pancurses::COLOR_YELLOW, pancurses::COLOR_BLACK),
         pancurses::init_pair(9, pancurses::COLOR_CYAN, pancurses::COLOR_BLACK),
-        window.attron(pancurses::A_NORMAL),
-        window.attron(pancurses::A_NORMAL),
     );
 }
 
@@ -195,7 +279,7 @@ impl UIElement {
             action: Action::Nothing,
         }
     }
-    
+
     pub fn clickable(text: String, x: i32, y: i32, color: u64, action: Action) -> Self {
         Self {
             text: text.clone(),
@@ -245,7 +329,7 @@ impl UI {
         if self._c_section != to {
             if let Some(target_vec) = match self._c_section {
                 Part::Header => Some(&mut self.header_elements),
-                Part::Body   => Some(&mut self.body_elements),
+                Part::Body => Some(&mut self.body_elements),
                 Part::Footer => Some(&mut self.footer_elements),
                 _ => None,
             } {
@@ -264,13 +348,14 @@ impl UI {
     pub fn add(&mut self, element: UIElement) {
         let target_vec = match self._c_section {
             Part::Header => &mut self.header_elements,
-            Part::Body   => &mut self.body_elements,
+            Part::Body => &mut self.body_elements,
             Part::Footer => &mut self.footer_elements,
             _ => return,
         };
-        if let Some(existing ) = target_vec.get(self._c_index) {
+        if let Some(existing) = target_vec.get(self._c_index) {
             if *existing != element {
-                self._c_coord_cleanup.push((existing.x, existing.y, existing.length));
+                self._c_coord_cleanup
+                    .push((existing.x, existing.y, existing.length));
                 self._c_redrw_cleanup.push((self._c_section, self._c_index));
                 target_vec[self._c_index] = element;
                 self.redraw = true;
@@ -301,25 +386,30 @@ impl UI {
         }
         Action::Nothing
     }
-    
+
     pub fn draw_wrapper(&mut self, window: &Window, maxlen: &Duration, fcalc: &Duration) {
-        if self.redraw { // _c_cleanup: Vec<(i32, i32, i32, Part, usize)>
+        if self.redraw {
+            // _c_cleanup: Vec<(i32, i32, i32, Part, usize)>
             for (x, y, length) in self._c_coord_cleanup.drain(..) {
                 if length != 0 {
                     window.mvaddstr(y, x, &" ".repeat(length as usize));
                 }
             }
-            if self._c_redrw_cleanup.iter().any(|(s, _)| *s == Part::Header) {
+            if self
+                ._c_redrw_cleanup
+                .iter()
+                .any(|(s, _)| *s == Part::Header)
+            {
                 self.draw_const(window);
                 for j in &self.header_elements {
                     j.draw(window);
                 }
-            }       
+            }
             for (section, index) in self._c_redrw_cleanup.drain(..) {
                 if let Some(target) = match section {
-                    Part::Body   => Some(&self.body_elements),
+                    Part::Body => Some(&self.body_elements),
                     Part::Footer => Some(&self.footer_elements),
-                    _ => None, 
+                    _ => None,
                 } {
                     target[index].draw(window);
                 }
@@ -335,37 +425,34 @@ impl UI {
             self.draw_footer(window);
             self.redraw = false;*/
         }
-
-
     }
     pub fn draw_const(&mut self, window: &Window) {
         window.border(
-            ACS_VLINE(),   // sol kenar
-            ACS_VLINE(),   // sağ kenar
-            ACS_HLINE(),   // üst kenar
-            ACS_HLINE(),   // alt kenar
-            ACS_ULCORNER(),// sol üst köşe
-            ACS_URCORNER(),// sağ üst köşe
-            ACS_LLCORNER(),// sol alt köşe
-            ACS_LRCORNER() // sağ alt köşe
+            ACS_VLINE(),    // sol kenar
+            ACS_VLINE(),    // sağ kenar
+            ACS_HLINE(),    // üst kenar
+            ACS_HLINE(),    // alt kenar
+            ACS_ULCORNER(), // sol üst köşe
+            ACS_URCORNER(), // sağ üst köşe
+            ACS_LLCORNER(), // sol alt köşe
+            ACS_LRCORNER(), // sağ alt köşe
         );
         window.mv(MAXY - 5, 0);
         window.addch(ACS_LTEE());
-        for _ in 0..(MAXX-2) {
+        for _ in 0..(MAXX - 2) {
             window.addch(ACS_HLINE());
         }
         window.addch(ACS_RTEE());
-
     }
     fn draw_essential(&mut self, window: &Window, maxlen: &Duration, fcalc: &Duration) {
         let start = MAXX / 2 - 7;
-        window.mv(MAXY-3, start);
+        window.mv(MAXY - 3, start);
         for _ in 0..15 {
             window.addch(ACS_HLINE());
         }
         if *maxlen != Duration::from_secs(0) {
             let filled = calc(*maxlen, *fcalc);
-            window.mv(MAXY-3, start);
+            window.mv(MAXY - 3, start);
             for _ in 0..filled {
                 window.attron(COLOR_PAIR(1));
                 window.addch(ACS_HLINE());
@@ -373,7 +460,6 @@ impl UI {
             }
         }
     }
-
 }
 
 impl PartialEq for UIElement {

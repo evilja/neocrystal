@@ -1,12 +1,11 @@
-use rand::prelude::*;
 use crate::modules::utils::{addto_playlist, playlist_data};
+use rand::prelude::*;
 
 use super::utils::{artist_data, change_artist};
 use mp3_duration;
-use std::time::Duration;
 use std::path::Path;
 use std::thread::spawn;
-
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Song {
@@ -44,8 +43,7 @@ impl Songs {
         for (i, path) in paths.iter().enumerate() {
             let path_clone = path.clone();
             let handle = spawn(move || {
-                mp3_duration::from_path(Path::new(&path_clone))
-                    .unwrap_or(Duration::from_secs(0))
+                mp3_duration::from_path(Path::new(&path_clone)).unwrap_or(Duration::from_secs(0))
             });
             handles.push((i, handle));
         }
@@ -65,9 +63,12 @@ impl Songs {
                 .to_string_lossy()
                 .to_string();
 
-
-
-            let searchable = format!("{} {} {}", name.to_lowercase(), artist.to_lowercase(), playlist.to_lowercase());
+            let searchable = format!(
+                "{} {} {}",
+                name.to_lowercase(),
+                artist.to_lowercase(),
+                playlist.to_lowercase()
+            );
 
             all_songs.push(Song {
                 path: path.clone(),
@@ -102,29 +103,27 @@ impl Songs {
             .get(self.current_index)
             .map(|s| s.artist.clone())
             .unwrap_or("Nothing".to_string())
-
     }
 
     pub fn current_playlist(&self) -> String {
         if self.stophandler {
-            return "it's not playing. this is a bug.".to_string()
+            return "it's not playing. this is a bug.".to_string();
         }
 
-        match self.all_songs
+        match self
+            .all_songs
             .get(self.current_index)
-            .map(|s| s.playlist.clone()) {
-                Some(something) => {
-                    if something == "" {
-                        "No playlist".to_string()
-                    } else {
-                        something
-                    }
-
-                },
-                None => "No playlist".to_string(),
-
+            .map(|s| s.playlist.clone())
+        {
+            Some(something) => {
+                if something == "" {
+                    "No playlist".to_string()
+                } else {
+                    something
+                }
             }
-
+            None => "No playlist".to_string(),
+        }
     }
 
     pub fn current_song_path(&self) -> String {
@@ -181,7 +180,9 @@ impl Songs {
         let idx = self.filtered_songs[index_in_filtered];
         if change_artist(&self.all_songs[idx].path, artist).is_ok() {
             self.all_songs[idx].artist = artist.clone();
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + &self.all_songs[idx].artist.to_lowercase() + &self.all_songs[idx].playlist.to_lowercase();
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
+                + &self.all_songs[idx].artist.to_lowercase()
+                + &self.all_songs[idx].playlist.to_lowercase();
         }
     }
     pub fn set_playlist(&mut self, index_in_filtered: usize, playlist: &String) {
@@ -191,7 +192,9 @@ impl Songs {
         let idx = self.filtered_songs[index_in_filtered];
         if addto_playlist(&self.all_songs[idx].path, playlist).is_ok() {
             self.all_songs[idx].playlist = playlist.clone();
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase() + &self.all_songs[idx].artist.to_lowercase() + &playlist.to_string().to_lowercase();
+            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
+                + &self.all_songs[idx].artist.to_lowercase()
+                + &playlist.to_string().to_lowercase();
         }
     }
     pub fn search(&mut self, pattern: &String) {
@@ -232,7 +235,9 @@ impl Songs {
         } else {
             self.blacklist.push(original_index);
             if original_index == self.setnext {
-                if self.setnext != usize::MAX { self.all_songs[self.setnext].forced = false; }
+                if self.setnext != usize::MAX {
+                    self.all_songs[self.setnext].forced = false;
+                }
                 self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
             }
         }
@@ -284,7 +289,9 @@ impl Songs {
         if self.filtered_songs.is_empty() || self.stophandler {
             return Err(());
         }
-        if self.setnext != usize::MAX && self.all_songs[self.setnext].forced { return Ok(self.setnext) }
+        if self.setnext != usize::MAX && self.all_songs[self.setnext].forced {
+            return Ok(self.setnext);
+        }
         if self.filtered_songs.len() == 1 {
             let original_index = self.filtered_songs[0];
             if self.blacklist.contains(&original_index) {
@@ -306,24 +313,25 @@ impl Songs {
             if candidate_list.is_empty() {
                 return Err(());
             }
-            
+
             let idx = rng.random_range(0..candidate_list.len());
-            return Ok(candidate_list[idx]); 
+            return Ok(candidate_list[idx]);
         }
 
         // sequential
         if let Ok(start) = self.get_filtered_index(self.current_index) {
-            for &i in self.filtered_songs.iter().skip(start + 1) {
+            for &i in &self.filtered_songs[start + 1..] {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }
             }
-            for &i in self.filtered_songs.iter().take(start - 1) {
+            for &i in self.filtered_songs.iter().take(start.saturating_sub(1)) {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }
             }
-        } else { // this shit should NEVER run but is there just in case
+        } else {
+            // this shit should NEVER run but is there just in case
             for &i in &self.filtered_songs {
                 if !self.blacklist.contains(&i) && i != self.current_index {
                     return Ok(i);
