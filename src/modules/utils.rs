@@ -1,5 +1,6 @@
 use id3::TagLike;
-
+use unicode_width::UnicodeWidthStr;
+use unicode_segmentation::UnicodeSegmentation;
 pub struct Volume {
     pub steps: u8,
     pub step_div: u8,
@@ -64,18 +65,20 @@ pub fn change_artist(filepath: &str, new_artist: &str) -> Result<(), String> {
 use std::time::{Duration, Instant};
 
 pub struct SlidingText {
-    text: String,
+    graphemes: Vec<String>,
     width: usize,
     offset: usize,
     last_tick: Instant,
-    speed: Duration, // how often to slide by 1 char
+    speed: Duration,
 }
 
 impl SlidingText {
     pub fn new(text: impl Into<String>, width: usize, speed: Duration) -> Self {
-        let text = text.into();
+        let text = text.into() + "   "; // keep your padding
+        let graphemes = text.graphemes(true).map(|g| g.to_string()).collect();
+
         Self {
-            text: format!("{}   ", text), // add spaces at the end for smooth loop
+            graphemes,
             width,
             offset: 0,
             last_tick: Instant::now(),
@@ -84,35 +87,47 @@ impl SlidingText {
     }
 
     pub fn reset_to(&mut self, new_text: impl Into<String>) {
-        self.text = format!("{}   ", new_text.into());
+        let text = new_text.into() + "   ";
+        self.graphemes = text.graphemes(true).map(|g| g.to_string()).collect();
         self.offset = 0;
         self.last_tick = Instant::now();
     }
-    /// Advance the offset if enough time passed
-    pub fn _update(&mut self) {
+
+    fn _update(&mut self) {
         if self.last_tick.elapsed() >= self.speed {
-            self.offset = (self.offset + 1) % self.text.len();
+            self.offset = (self.offset + 1) % self.graphemes.len();
             self.last_tick = Instant::now();
         }
     }
 
-    /// Get the currently visible slice (with wrapping)
     pub fn visible_text(&mut self) -> String {
         self._update();
-        let len = self.text.len();
-        if self.text == "Nothing   ".to_string() {
-            return "Nothing".to_string();
+
+        if self.graphemes.is_empty() {
+            return String::new();
         }
-        if len - 3 <= self.width {
-            return self.text[..self.text.len() - 3].to_string();
+
+        // compute full display width
+        let full_width: usize = self.graphemes.iter().map(|g| g.width()).sum();
+
+        // SPECIAL CASE: Remove "   " padding when the text fits (your original behavior)
+        // Check if last 3 graphemes are spaces AND full text fits in the provided width
+        if full_width <= self.width {
+            // Trim exactly 3 trailing graphemes
+            let trimmed = &self.graphemes[..self.graphemes.len().saturating_sub(3)];
+            return trimmed.concat();
         }
-        if self.offset + self.width <= len {
-            self.text[self.offset..self.offset + self.width].to_string()
-        } else {
-            let end_part = &self.text[self.offset..];
-            let start_part = &self.text[..(self.width - end_part.len())];
-            format!("{}{}", end_part, start_part)
+
+        // Normal sliding behavior
+        let mut visible = String::new();
+        let mut idx = self.offset;
+
+        while visible.width() < self.width {
+            visible.push_str(&self.graphemes[idx]);
+            idx = (idx + 1) % self.graphemes.len();
         }
+
+        visible
     }
 }
 
@@ -163,10 +178,15 @@ pub struct Indexer {
 }
 
 impl RpcState {
-    pub fn setup(&mut self, mode: ReinitMode) {
+    pub fn renew(&mut self) {
         self.reinit = true;
         self.timer = Instant::now() + Duration::from_secs(3);
-        self.mode = mode;
+        self.mode = ReinitMode::Renew;
+    }
+    pub fn init(&mut self) {
+        self.reinit = true;
+        self.timer = Instant::now() + Duration::from_secs(3);
+        self.mode = ReinitMode::Init;
     }
     pub fn reset(&mut self) {
         self.reinit = false;

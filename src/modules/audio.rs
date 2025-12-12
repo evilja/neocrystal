@@ -31,7 +31,7 @@ pub fn play_audio(
     let sink = rodio::Sink::connect_new(&stream_handle.mixer());
     let mut cached: String = "uinit".to_string();
     let mut cached_duration: Duration = Duration::ZERO;
-    let mut sleepduration: u8 = 0;
+    let mut sleep_duration: u8 = 0;
     loop {
         if let Ok(ac_command) = receiver.recv_timeout(Duration::from_millis(200)) {
             match ac_command {
@@ -44,7 +44,7 @@ pub fn play_audio(
                         continue;
                     }
                     sink.play();
-                    sleepduration = 100;
+                    sleep_duration = 100;
                 }
 
                 AudioCommand::SetVolume(value) => {
@@ -63,7 +63,7 @@ pub fn play_audio(
                     cached_duration = mp3_duration::from_path(Path::new(value.as_str()))?;
                     sink.play();
                     cached = value;
-                    sleepduration = 100;
+                    sleep_duration = 100;
                 }
                 AudioCommand::SeekForward => {
                     if sink.get_pos() + Duration::from_secs(5) >= cached_duration
@@ -99,12 +99,12 @@ pub fn play_audio(
         if cached == "uinit".to_string() || sink.is_paused() {
             continue;
         }
-        thread::sleep(Duration::from_millis(sleepduration as u64));
+        thread::sleep(Duration::from_millis(sleep_duration as u64));
         transmitter.send(AudioReportAction::Duration(
             cached.clone(),
             duration_autobuild(cached_duration, sink.get_pos()),
         ))?;
-        sleepduration = 0;
+        sleep_duration = 0;
     }
     Ok("Stopped".to_string())
 }

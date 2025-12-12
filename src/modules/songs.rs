@@ -94,6 +94,7 @@ impl Songs {
             setnext: usize::MAX,
         }
     }
+    
     pub fn current_artist(&self) -> String {
         if self.stophandler {
             return "Nothing".to_string();

@@ -3,12 +3,12 @@ use pancurses::{
     ACS_URCORNER, ACS_VLINE, COLOR_PAIR,
 };
 use std::time::Duration;
-
-use super::songs::Songs;
+use unicode_width::UnicodeWidthStr;
 use libc::{setlocale, LC_ALL};
 use std::ffi::CString;
 const MAXX: i32 = 50;
 const MAXY: i32 = 20;
+use super::general::GeneralState;
 
 #[cfg(target_os = "windows")]
 type ColorIntegerSize = u64;
@@ -40,40 +40,29 @@ pub fn to_mm_ss(duration: Duration) -> String {
 }
 
 pub fn redraw(
-    ui: &mut UI,
+    general: &mut GeneralState,
     window: &mut pancurses::Window,
-    songs: &Songs,
-    page: usize,
-    local_volume_counter: u8,
-    is_search: &String,
-    isloop: bool,
-    reinit_rpc: bool,
-    maxlen: Duration,
-    fcalc: Duration,
-    fun_index: usize,
-    desel: bool,
-    sliding: String,
 ) {
     // HEADER — Page indicator
     let page_indicator = format!(
         "Page {}/{}",
-        page,
-        (songs.filtered_songs.len() as f32 / songs.typical_page_size as f32).ceil() as usize
+        general.index.page,
+        (general.songs.filtered_songs.len() as f32 / general.songs.typical_page_size as f32).ceil() as usize
     );
-    ui.add(UIElement::new(
+    general.ui.add(UIElement::new(
         page_indicator.clone(),
         MAXX - 3 - page_indicator.len() as i32,
         0,
         0,
     ));
-    ui.add(UIElement::clickable(
+    general.ui.add(UIElement::clickable(
         "< ".to_string(),
         MAXX - 5 - page_indicator.len() as i32,
         0,
         0,
         Action::PgUp,
     ));
-    ui.add(UIElement::clickable(
+    general.ui.add(UIElement::clickable(
         " >".to_string(),
         MAXX - 3,
         0,
@@ -81,133 +70,134 @@ pub fn redraw(
         Action::PgDown,
     ));
     // HEADER — Search bar
-    let search_text = if is_search != "false" {
-        format!("Input: {}", is_search)
+    let search_text = if general.searchquery.query != "false" {
+        format!("Input: {}", general.searchquery.query)
     } else {
         "Search or edit".to_string()
     };
-    ui.add(UIElement::new(search_text, 2, 0, 9));
+    general.ui.add(UIElement::new(search_text, 2, 0, 9));
 
-    ui.cycle(Part::Body);
+    general.ui.cycle(Part::Body);
     // BODY — Şarkı listesi
-    let start_index = (page - 1) * songs.typical_page_size;
+    let start_index = (general.index.page - 1) * general.songs.typical_page_size;
     let end_index = std::cmp::min(
-        start_index + songs.typical_page_size,
-        songs.filtered_songs.len(),
+        start_index + general.songs.typical_page_size,
+        general.songs.filtered_songs.len(),
     );
-    for (i, song_index) in songs.filtered_songs[start_index..end_index]
+    for (i, song_index) in general.songs.filtered_songs[start_index..end_index]
         .iter()
         .enumerate()
     {
-        let name = &songs.all_songs[*song_index].name;
+        let name = &general.songs.all_songs[*song_index].name;
         let mut element =
-            UIElement::clickable(name.to_string(), 2, i as i32 + 1, 0, Action::Play(page, i));
+            UIElement::clickable(name.to_string(), 2, i as i32 + 1, 0, Action::Play(general.index.page, i));
 
-        if i == fun_index && !desel {
+        if i == general.index.index && !general.state.desel {
             element.color = 3;
         }
-        if *name == songs.current_name() {
+        if *name == general.songs.current_name() {
             element.text = format!("{}", element.text); // *
-            ui.add(UIElement::new(
+            general.ui.add(UIElement::new(
                 "*".to_string(),
-                element.text.chars().count() as i32 + 3,
+                element.text.width() as i32 + 3,
                 i as i32 + 1,
-                if songs.stophandler { 4 } else { 1 },
+                if general.songs.stophandler { 4 } else { 1 },
             ));
-        } else if songs.is_blacklist(*song_index) {
+        } else if general.songs.is_blacklist(*song_index) {
             element.text = format!("{}", element.text); // bl
-            ui.add(UIElement::new(
+            general.ui.add(UIElement::new(
                 "BL".to_string(),
-                element.text.chars().count() as i32 + 3,
+                element.text.width() as i32 + 3,
                 i as i32 + 1,
                 2,
             ));
-        } else if *song_index == songs.get_next() {
+        } else if *song_index == general.songs.get_next() {
             element.text = format!("{}", element.text); // next
-            ui.add(UIElement::new(
+            general.ui.add(UIElement::new(
                 "-".to_string(),
-                element.text.chars().count() as i32 + 3,
+                element.text.width() as i32 + 3,
                 i as i32 + 1,
                 4,
             ));
         }
 
-        ui.add(element);
+        general.ui.add(element);
     }
 
-    ui.cycle(Part::Footer);
+    general.ui.cycle(Part::Footer);
 
-    ui.add(UIElement::new(
+    let sliding = general.sliding.visible_text();
+    general.ui.add(UIElement::new(
         sliding.clone(),
-        MAXX / 2 - sliding.chars().count() as i32 / 2,
+        MAXX / 2 - sliding.width() as i32 / 2,
         MAXY - 4,
         1,
     ));
 
     // FOOTER — Shuffle / Loop / RPC / Volume
-    let shuffle_text = format!("{}", if songs.shuffle { "yes" } else { "no" });
-    let loop_text = format!("{}", if isloop { "yes" } else { "no" });
-    let rpc_text = format!("{}", if reinit_rpc { "no" } else { "yes" });
+    let shuffle_text = format!("{}", if general.songs.shuffle { "yes" } else { "no" });
+    let loop_text = format!("{}", if general.state.isloop { "yes" } else { "no" });
+    let rpc_text = format!("{}", if general.rpc.reinit { "no" } else { "yes" });
 
-    ui.add(UIElement::new("Shu".to_string(), 2, MAXY - 3, 0));
-    ui.add(UIElement::new("Rep".to_string(), 7, MAXY - 3, 0));
-    ui.add(UIElement::new("Rpc".to_string(), MAXX - 9, MAXY - 3, 0));
-    ui.add(UIElement::new("Vol".to_string(), MAXX - 5, MAXY - 3, 0));
-    ui.add(UIElement::clickable(
+    general.ui.add(UIElement::new("Shu".to_string(), 2, MAXY - 3, 0));
+    general.ui.add(UIElement::new("Rep".to_string(), 7, MAXY - 3, 0));
+    general.ui.add(UIElement::new("Rpc".to_string(), MAXX - 9, MAXY - 3, 0));
+    general.ui.add(UIElement::new("Vol".to_string(), MAXX - 5, MAXY - 3, 0));
+    general.ui.add(UIElement::clickable(
         shuffle_text,
         2,
         MAXY - 2,
-        if songs.shuffle { 1 } else { 2 },
+        if general.songs.shuffle { 1 } else { 2 },
         Action::Shuffle,
     ));
-    ui.add(UIElement::clickable(
+    general.ui.add(UIElement::clickable(
         loop_text,
         7,
         MAXY - 2,
-        if isloop { 1 } else { 2 },
+        if general.state.isloop { 1 } else { 2 },
         Action::Repeat,
     ));
-    ui.add(UIElement::clickable(
+    general.ui.add(UIElement::clickable(
         rpc_text,
         MAXX - 9,
         MAXY - 2,
-        if reinit_rpc { 2 } else { 1 },
+        if general.rpc.reinit { 2 } else { 1 },
         Action::Rpc,
     ));
-    ui.add(UIElement::new(
-        format!("{}", local_volume_counter),
-        MAXX - ((format!("{} ", local_volume_counter)).len() as i32 + 1),
+    general.ui.add(UIElement::new(
+        format!("{}", general.volume.steps),
+        MAXX - ((format!("{} ", general.volume.steps)).len() as i32 + 1),
         MAXY - 2,
         0,
     ));
 
     // FOOTER — Progress bar
-    ui.add(UIElement::new(
-        to_mm_ss(maxlen.checked_sub(fcalc).unwrap_or_default()),
+    general.ui.add(UIElement::new(
+        to_mm_ss(general.timer.maxlen.checked_sub(general.timer.fcalc).unwrap_or_default()),
         MAXX / 2 - 13,
         MAXY - 3,
         0,
     ));
-    ui.add(UIElement::new(to_mm_ss(maxlen), MAXX / 2 + 9, MAXY - 3, 0));
+    general.ui.add(UIElement::new(to_mm_ss(general.timer.maxlen), MAXX / 2 + 9, MAXY - 3, 0));
     {
-        let artist_name = songs.get_artist_search();
-        ui.add(UIElement::new(
+        let artist_name = general.songs.get_artist_search();
+        general.ui.add(UIElement::new(
             artist_name.clone(),
-            MAXX / 2 - artist_name.chars().count() as i32 / 2,
+            MAXX / 2 - artist_name.width() as i32 / 2,
             MAXY - 2,
             0,
         ));
-        let mut playlist_name = songs.get_playlist_search();
+        let mut playlist_name = general.songs.get_playlist_search();
         if playlist_name.len() > 12 {
             playlist_name = playlist_name[..12].to_string();
         }
-        ui.add(UIElement::new(playlist_name.clone(), 2, MAXY - 4, 0));
+        general.ui.add(UIElement::new(playlist_name.clone(), 2, MAXY - 4, 0));
     }
 
-    ui.cycle(Part::Header);
+    general.ui.cycle(Part::Header);
 
     // Çizim
-    ui.draw_wrapper(window, &maxlen, &fcalc);
+    general.ui.draw_wrapper(window, &general.timer.maxlen, &general.timer.fcalc);
 }
 
 pub fn init_curses(window: &mut Window) {
@@ -273,7 +263,7 @@ impl UIElement {
             text: text.clone(),
             x,
             y,
-            length: text.chars().count() as i32,
+            length: text.width() as i32,
             color,
             button: false,
             action: Action::Nothing,
@@ -285,7 +275,7 @@ impl UIElement {
             text: text.clone(),
             x,
             y,
-            length: text.chars().count() as i32,
+            length: text.width() as i32,
             color,
             button: true,
             action,
