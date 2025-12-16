@@ -112,7 +112,7 @@ pub fn draw_search(general: &mut GeneralState) {
         } else {
             format!("Search: {}", general.searchquery.query)
         },
-        0,
+        9,
     );
 }
 
@@ -270,11 +270,11 @@ pub fn draw_rpc_indc(general: &mut GeneralState) {
         0,
         match general.rpc.mode {
             ReinitMode::Init => "int",
-            ReinitMode::Renew => "rnw",
+            ReinitMode::Renew | ReinitMode::Pretend => "rnw",
             ReinitMode::None => "yes",
         }
         .into(),
-        if general.rpc.mode == ReinitMode::None { 1 } else { 2 },
+        if general.rpc.mode == ReinitMode::None { 1 } else if general.rpc.mode == ReinitMode::Init { 2 } else { 4 },
     );
 }
 

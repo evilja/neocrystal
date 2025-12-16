@@ -150,6 +150,7 @@ pub enum ReinitMode {
     Renew,
     Init,
     None,
+    Pretend,
 }
 pub struct Timer {
     pub fcalc: Duration,
@@ -181,14 +182,21 @@ pub struct Indexer {
 }
 
 impl RpcState {
-    pub fn renew(&mut self) {
+    fn _init(&mut self) {
         self.reinit = true;
-        self.timer = Instant::now() + Duration::from_secs(3);
+        self.timer = Instant::now() + Duration::from_secs(3);   
+    }
+
+    pub fn renew(&mut self) {
+        self._init();
         self.mode = ReinitMode::Renew;
     }
+    pub fn pretend(&mut self) {
+        self._init();
+        self.mode = ReinitMode::Pretend;
+    }
     pub fn init(&mut self) {
-        self.reinit = true;
-        self.timer = Instant::now() + Duration::from_secs(3);
+        self._init();
         self.mode = ReinitMode::Init;
     }
     pub fn reset(&mut self) {

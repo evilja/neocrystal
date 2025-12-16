@@ -204,7 +204,9 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 }
 
                 Input::Character(PLAY) => {
-                    play_current_song(&mut general, &tx);
+                    if !play_current_song(&mut general, &tx) {
+                        continue;
+                    };
                     general.rpc.init();
                     draw_artist(&mut general);
                     draw_playlist(&mut general);
@@ -250,7 +252,9 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     }
                     general.songs.stophandler = false;
                     tx.send(AudioCommand::Resume).unwrap();
+                    general.rpc.pretend();
                     draw_song_indicators(&mut general);
+                    draw_rpc_indc(&mut general);
                 }
                 Input::KeyRight | Input::Character(RIGHT) => {
                     tx.send(AudioCommand::SeekForward).unwrap();
@@ -324,13 +328,13 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
 pub fn play_current_song(
     general: &mut GeneralState,
     tx: &Sender<AudioCommand>,
-) {
+) -> bool {
     if general.songs.set_by_pindex(general.index.index, general.index.page) != Err(0) {
         if tx
             .send(AudioCommand::Play(general.songs.current_song_path()))
             .is_err()
         {
-            return;
+            return false;
         }
 
         general.timer.maxlen = general.songs.get_duration();
@@ -338,6 +342,9 @@ pub fn play_current_song(
         general.timer.fcalc = general.timer.maxlen;
 
         general.sliding.reset_to(general.songs.current_name());
+        return true;
+    } else {
+        return false;
     }
 }
 

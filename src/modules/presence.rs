@@ -10,6 +10,7 @@ pub enum RpcCommand {
     Renew(u64),
     Stop,
     Clear,
+    Pretend(u64),
 }
 
 pub fn rpc_init_autobuild(songs: &Songs, stamp: u64) -> RpcCommand {
@@ -19,6 +20,13 @@ pub fn rpc_init_autobuild(songs: &Songs, stamp: u64) -> RpcCommand {
         songs.current_playlist(),
         stamp,
     )
+}
+
+#[derive(PartialEq)]
+enum Init {
+    Yes,
+    No,
+    Pretend,
 }
 
 pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
@@ -32,7 +40,7 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
     let mut detai: String = "".to_string();
     let mut plist: String = "Crystal+ by Myisha".to_string();
     let mut ed_ts: (u64, u64) = (0, 0);
-    let mut init: bool = false;
+    let mut init: Init = Init::No;
     loop {
         match comm_recv.recv() {
             Ok(rc) => {
@@ -41,12 +49,12 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
 
                     RpcCommand::Clear => {
                         let _ = drpc.clear_activity();
-                        init = false;
+                        init = Init::Pretend;
                         continue;
                     }
 
                     RpcCommand::Renew(time) => {
-                        if !init {
+                        if init != Init::Yes {
                             continue;
                         }
                         st_ts.1 = SystemTime::now()
@@ -55,6 +63,18 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
                             .as_secs()
                             - time;
                         ed_ts.1 = ed_ts.0 - st_ts.0 + st_ts.1;
+                    }
+                    RpcCommand::Pretend(time) => {
+                        if init != Init::Pretend {
+                            continue;
+                        }
+                        st_ts.1 = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs()
+                            - time;
+                        ed_ts.1 = ed_ts.0 - st_ts.0 + st_ts.1;
+                        init = Init::Yes;
                     }
 
                     RpcCommand::Init(name, artist, playlist, time) => {
@@ -69,7 +89,7 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
                         plist = playlist;
                         st_ts.1 = st_ts.0;
                         ed_ts.1 = ed_ts.0;
-                        init = true;
+                        init = Init::Yes;
                     }
                 };
                 for _ in 0..=5 {

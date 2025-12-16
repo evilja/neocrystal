@@ -55,6 +55,15 @@ impl GeneralState {
                         .as_secs(), // elapsed time as u64
                 ));
             }
+            ReinitMode::Pretend => {
+                let _ = rpctx.send(RpcCommand::Pretend(
+                    self.timer
+                        .maxlen
+                        .checked_sub(self.timer.fcalc)
+                        .unwrap_or_default()
+                        .as_secs(), // elapsed time as u64
+                ));
+            }
             ReinitMode::Init => {
                 let _ = rpctx.send(rpc_init_autobuild(
                     &self.songs,
