@@ -1,5 +1,5 @@
 use std::time::{Duration, Instant};
-
+use super::curses::Ownership;
 use crate::modules::presence::RpcCommand;
 use crate::modules::songs::absolute_index;
 use crate::modules::utils::ReinitMode;
@@ -7,6 +7,7 @@ use std::sync::mpsc::Sender;
 use crate::modules::presence::rpc_init_autobuild;
 use glob::glob;
 use home::home_dir;
+
 
 use super::utils::{
     Indexer,
@@ -17,7 +18,7 @@ use super::utils::{
     SlidingText,
     SearchQuery
 };
-use super::curses::{UI, Action};
+use super::tui_borrow::{UI};
 use super::songs::Songs;
 
 pub struct GeneralState {
@@ -25,7 +26,7 @@ pub struct GeneralState {
     pub timer: Timer,
     pub state: State,
     pub volume: Volume,
-    pub ui: UI,
+    pub ui: UI<Ownership>,
     pub action: Action,
     pub rpc: RpcState,
     pub sliding: SlidingText,
@@ -77,12 +78,14 @@ impl GeneralState {
                 spint: false,
                 isloop: false,
                 desel: false,
+                mouse_support: false,
+                needs_update: true,
             },
             volume: Volume {
                 steps: 50,
                 step_div: 2,
             },
-            ui: UI::new(),
+            ui: UI::new(50, 20),
             action: Action::Nothing,
             rpc: RpcState {
                 reinit: false,
@@ -115,3 +118,14 @@ fn globwrap() -> Vec<String> {
             .collect::<Vec<String>>()
 
 } 
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Action {
+    Play(usize, usize),
+    Shuffle,
+    Repeat,
+    Rpc,
+    PgDown,
+    PgUp,
+    Nothing,
+}

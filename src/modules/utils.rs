@@ -145,6 +145,7 @@ impl SearchQuery {
         self.query = String::new();
     }
 }
+#[derive(PartialEq)]
 pub enum ReinitMode {
     Renew,
     Init,
@@ -166,6 +167,8 @@ pub struct State {
     pub spint: bool,
     pub isloop: bool,
     pub desel: bool,
+    pub mouse_support: bool,
+    pub needs_update: bool,
 }
 pub struct RpcState {
     pub reinit: bool,

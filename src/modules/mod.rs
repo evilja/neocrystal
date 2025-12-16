@@ -5,3 +5,5 @@ pub mod presence;
 pub mod songs;
 pub mod utils;
 pub mod general;
+pub mod tui_borrow;
+pub mod mouse;

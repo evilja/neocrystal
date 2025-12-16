@@ -1,11 +1,12 @@
 extern crate glob;
 extern crate pancurses;
 use crate::modules::audio::{AudioCommand, AudioReportAction};
+use crate::modules::mouse::{self, action_to_key};
 use pancurses::{initscr, Input};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self};
-use std::time::{Instant};
-use super::general::GeneralState;
+use std::time::Instant;
+use super::general::{GeneralState, Action};
 
 use super::{
     curses::*,
@@ -13,24 +14,25 @@ use super::{
     songs::{absolute_index},
 };
 
-const UP: char = 'u';
-const DOWN: char = 'j';
-const LEFT: char = 'n';
-const RIGHT: char = 'm';
-const SHUFFLE: char = 'f';
-const PLAY: char = 'p';
-const BLACKLIST: char = 'b';
-const STOP: char = 's';
-const RESUME: char = 'r';
-const LOOP: char = 'l';
-const SPECIAL: char = 'o';
-const QUIT: char = 'q';
-const SEARCH: char = 'h';
-const TOP: char = 'g';
-const CHANGE: char = 'c';
-const SETNEXT: char = 'e';
-const DESEL: char = 'd';
-const SETPLAYLIST: char = 'v';
+pub const UP: char = 'u';
+pub const DOWN: char = 'j';
+pub const LEFT: char = 'n';
+pub const RIGHT: char = 'm';
+pub const SHUFFLE: char = 'f';
+pub const PLAY: char = 'p';
+pub const BLACKLIST: char = 'b';
+pub const STOP: char = 's';
+pub const RESUME: char = 'r';
+pub const LOOP: char = 'l';
+pub const SPECIAL: char = 'o';
+pub const QUIT: char = 'q';
+pub const SEARCH: char = 'h';
+pub const FULL: char = 'g';
+pub const CHANGE: char = 'c';
+pub const SETNEXT: char = 'e';
+pub const DESEL: char = 'd';
+pub const SETPLAYLIST: char = 'v';
+pub const MOUSE_SUPPORT: char = 't';
 
 /// macro: get_input_or_report
 /// try to get input from pancurses:
@@ -79,19 +81,22 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
     });
 
     init_curses(&mut window);
-    general.ui.draw_const(&mut window);
+    draw_frame(&mut window);
+    autoalloc(&mut general);
+    draw_all(&mut general, &mut window);
     loop {
-        redraw(
-            &mut general,
-            &mut window,
-        );
-
+        if general.state.needs_update {
+            update(&mut general, &mut window);
+            general.state.needs_update = false;
+        }
+        if general.action != Action::Nothing {general.action = Action::Nothing;}
         // key_opt catches either duration communications from audio thread or user input
         // if nothing is there to catch, it will just skip after 10 milliseconds           there
 
         let key_opt = get_input_or_report!(window, comm_rx, general.songs, general.timer, 10);
 
         if let Some(mut key) = key_opt {
+            general.state.needs_update = true;
             if general.searchquery.mode != 0 {
                 match key {
                     Input::KeyEnter | Input::Character('\n') => {
@@ -100,67 +105,44 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                                 general.songs.search(&general.searchquery.query);
                                 general.index.index = 0;
                                 general.index.page = 1;
+                                draw_song_text(&mut general);
+                                draw_song_indicators(&mut general);
                             }
                             2 => {
                                 general.songs.set_artist(general.songs.match_c(), &general.searchquery.query);
+                                draw_artist(&mut general);
                             }
                             3 => {
                                 general.songs.set_playlist(general.songs.match_c(), &general.searchquery.query);
+                                draw_playlist(&mut general);
+
                             }
                             _ => {}
                         }
                         general.searchquery.default();
+                        draw_header(&mut general);
                         continue;
                     }
                     Input::KeyBackspace | Input::Character('\x7f') | Input::Character('\x08') => {
                         general.searchquery.query.pop();
+                        draw_header(&mut general);
                         continue;
                     }
                     Input::Character(i) => {
                         general.searchquery.query.push(i);
+                        draw_header(&mut general);
                         continue;
                     }
                     _ => {}
                 }
             }
-            if key == Input::KeyMouse {
+            if key == Input::KeyMouse && general.state.mouse_support {
                 if let Ok(mevent) = pancurses::getmouse() {
-                    if (mevent.bstate & 0x2) != 0 {
-                        general.action = general.ui.click(mevent.x, mevent.y);
-                    }
-                    match general.action {
-                        Action::Play(p, f) => {
-                            general.index.page = p;
-                            general.index.index = f;
-                            key = Input::Character(PLAY)
+                    if let Some(action) = mouse::handle_mouse(mevent, &general) {
+                        general.action = action;
+                        if let Some(nk) = action_to_key(action, &mut general) {
+                            key = nk;
                         }
-                        Action::Shuffle => {
-                            key = Input::Character(SHUFFLE);
-                        }
-                        Action::Repeat => {
-                            key = Input::Character(LOOP);
-                        }
-                        Action::Rpc => {
-                            general.rpc.renew();
-                        }
-                        Action::PgDown => {
-                            let absolute =
-                                absolute_index(0, general.index.page + 1, general.songs.typical_page_size)
-                                    < general.songs.filtered_songs.len() - 1;
-                            if absolute {
-                                general.index.index = 0;
-                                general.index.page += 1;
-                            }
-                        }
-                        Action::PgUp => {
-                            if general.index.page > 1 {
-                                general.index.page -= 1;
-                                general.index.index = general.songs.typical_page_size - 1;
-                            } else {
-                                general.index.index = 0;
-                            }
-                        }
-                        Action::Nothing => (),
                     }
                 }
             }
@@ -182,12 +164,23 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     general.timer.fcalc = general.timer.maxlen;
                     general.rpc.init();
                     general.sliding.reset_to(general.songs.current_name());
+                    draw_artist(&mut general);
+                    draw_playlist(&mut general);
+                    draw_sliding(&mut general);
+                    draw_time_max(&mut general);
+                    draw_time_cur(&mut general);
+                    draw_song_indicators(&mut general);
+                    draw_rpc_indc(&mut general);
                 }
                 Input::KeyF14 => {
                     //duration sent
                     if general.rpc.timer <= Instant::now() && general.rpc.reinit {
                         general.handle_rpc(&rpctx);
+                        draw_rpc_indc(&mut general);
                     }
+                    draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
+                    draw_time_cur(&mut general);
+                    draw_sliding(&mut general);
                 }
                 Input::Character(QUIT) => {
                     tx.send(AudioCommand::Stop).unwrap();
@@ -213,6 +206,20 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 Input::Character(PLAY) => {
                     play_current_song(&mut general, &tx);
                     general.rpc.init();
+                    draw_artist(&mut general);
+                    draw_playlist(&mut general);
+                    draw_sliding(&mut general);
+                    draw_time_max(&mut general);
+                    draw_time_cur(&mut general);
+                    draw_song_indicators(&mut general);
+                    draw_rpc_indc(&mut general);
+                    draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
+                    match general.action {
+                        Action::Play(_, _) => {
+                            draw_song_text(&mut general);
+                        }
+                        _ => (),
+                    }
                 }
 
                 Input::Character(SPECIAL) => {
@@ -221,16 +228,20 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
 
                 Input::Character(LOOP) => {
                     general.state.isloop = !general.state.isloop;
+                    draw_loop_indc(&mut general);
+                    draw_song_indicators(&mut general);
                 }
 
                 Input::Character(STOP) => {
                     general.songs.stop();
                     tx.send(AudioCommand::Pause).unwrap();
                     rpctx.send(RpcCommand::Clear).unwrap();
+                    draw_song_indicators(&mut general);
                 }
 
                 Input::Character(BLACKLIST) => {
                     general.blacklist();
+                    draw_song_indicators(&mut general);
                 }
 
                 Input::Character(RESUME) => {
@@ -239,30 +250,37 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     }
                     general.songs.stophandler = false;
                     tx.send(AudioCommand::Resume).unwrap();
+                    draw_song_indicators(&mut general);
                 }
                 Input::KeyRight | Input::Character(RIGHT) => {
                     tx.send(AudioCommand::SeekForward).unwrap();
                     general.rpc.renew();
+                    draw_rpc_indc(&mut general);
                 }
                 Input::KeyLeft | Input::Character(LEFT) => {
                     tx.send(AudioCommand::SeekBackward).unwrap();
                     general.rpc.renew();
+                    draw_rpc_indc(&mut general);
                 }
                 Input::Character(SHUFFLE) => {
                     general.songs.shuffle();
+                    draw_song_indicators(&mut general);
+                    draw_shuffle_indc(&mut general);
                 }
                 Input::Character(SEARCH) => {
                     general.searchquery.to_mode(1);
+                    draw_search(&mut general);
                 }
-                Input::Character(TOP) => {
-                    general.index.page = 1;
-                    general.index.index = 0;
+                Input::Character(FULL) => {
+                    draw_all(&mut general, &mut window);
                 }
                 Input::Character(CHANGE) => {
                     general.searchquery.to_mode(2);
+                    draw_search(&mut general);
                 }
                 Input::Character(SETPLAYLIST) => {
                     general.searchquery.to_mode(3);
+                    draw_search(&mut general);
                 }
                 Input::Character(SETNEXT) => {
                     general.songs.set_next(absolute_index(
@@ -270,9 +288,26 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         general.index.page,
                         general.songs.typical_page_size,
                     ));
+                    draw_song_indicators(&mut general);
                 }
                 Input::Character(DESEL) => {
                     general.state.desel = !general.state.desel;
+                    draw_song_text(&mut general);
+                }
+                Input::KeyPPage => {
+                    change_page(Direction::Up, &mut general);
+                    draw_song_indicators(&mut general);
+                    draw_song_text(&mut general);
+                    draw_page(&mut general);
+                }
+                Input::KeyNPage => {
+                    change_page(Direction::Down, &mut general);
+                    draw_song_indicators(&mut general);
+                    draw_song_text(&mut general);
+                    draw_page(&mut general);
+                }
+                Input::Character(MOUSE_SUPPORT) => {
+                    general.state.mouse_support = !general.state.mouse_support;
                 }
 
                 _ => (),
@@ -306,6 +341,40 @@ pub fn play_current_song(
     }
 }
 
+pub fn change_page(dir: Direction, general: &mut GeneralState) {
+    let psize = general.songs.typical_page_size.max(1);
+    let total = general.songs.filtered_songs.len();
+
+    if total == 0 {
+        return;
+    }
+
+    let max_page = (total + psize - 1) / psize;
+
+    match dir {
+        Direction::Up => {
+            if general.index.page > 1 {
+                general.index.page -= 1;
+                general.index.index = 0;
+                draw_page(general);
+                draw_song_text(general);
+                draw_song_indicators(general);
+            }
+        }
+
+        Direction::Down => {
+            if general.index.page < max_page {
+                general.index.page += 1;
+                general.index.index = 0;
+                draw_page(general);
+                draw_song_text(general);
+                draw_song_indicators(general);
+            }
+        }
+    }
+}
+
+
 pub enum Direction {
     Up,
     Down,
@@ -323,6 +392,7 @@ pub fn move_selection(
         }
         tx.send(AudioCommand::SetVolume(general.volume.as_f32()))
             .unwrap_or_else(|_| ());
+        draw_vol_indc(general);
     } else {
         match direction {
             Direction::Up => {
@@ -331,6 +401,8 @@ pub fn move_selection(
                 } else if general.index.page > 1 {
                     general.index.page -= 1;
                     general.index.index = general.songs.typical_page_size - 1;
+                    draw_page(general);
+                    draw_song_indicators(general);
                 }
             }
             Direction::Down => {
@@ -338,11 +410,15 @@ pub fn move_selection(
                     < general.songs.filtered_songs.len() - 1;
                 if general.index.index + 1 < general.songs.typical_page_size && absolute {
                     general.index.index += 1;
+                
                 } else if absolute {
                     general.index.page += 1;
                     general.index.index = 0;
+                    draw_page(general);
+                    draw_song_indicators(general);
                 }
             }
         }
+        draw_song_text(general);
     }
 }

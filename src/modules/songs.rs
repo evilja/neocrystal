@@ -81,6 +81,8 @@ impl Songs {
             });
         }
 
+        all_songs.sort_by(|a, b| (&a.artist, &a.name).cmp(&(&b.artist, &b.name)));
+
         let filtered_songs = (0..all_songs.len()).collect::<Vec<_>>();
 
         Self {
@@ -93,6 +95,7 @@ impl Songs {
             blacklist: Vec::new(),
             setnext: usize::MAX,
         }
+
     }
     
     pub fn current_artist(&self) -> String {
@@ -108,7 +111,7 @@ impl Songs {
 
     pub fn current_playlist(&self) -> String {
         if self.stophandler {
-            return "it's not playing. this is a bug.".to_string();
+            return "Not playing".to_string();
         }
 
         match self
@@ -159,19 +162,6 @@ impl Songs {
             .iter()
             .position(|&i| i == self.current_index)
             .unwrap_or(usize::MAX)
-    }
-
-    pub fn get_artist_search(&self) -> String {
-        self.all_songs
-            .get(self.current_index)
-            .map(|s| s.artist.clone())
-            .unwrap_or("Unknown".to_string())
-    }
-    pub fn get_playlist_search(&self) -> String {
-        self.all_songs
-            .get(self.current_index)
-            .map(|s| s.playlist.clone())
-            .unwrap_or("".to_string())
     }
 
     pub fn set_artist(&mut self, index_in_filtered: usize, artist: &String) {
