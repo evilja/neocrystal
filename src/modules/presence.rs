@@ -1,9 +1,41 @@
 use crate::modules::songs::Songs;
-use discord_presence::{models::ActivityType, Client};
 use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Sender, self};
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "rpc")]
+use discord_presence::{models::ActivityType, Client};
+
+
+pub struct RpcCommunication {
+    #[cfg(feature = "rpc")]
+    sender: Sender<RpcCommand>
+}
+
+impl RpcCommunication {
+    pub fn new() -> (Self, Option<Receiver<RpcCommand>>) {
+        #[cfg(feature = "rpc")]
+        {
+            let (sender, receiver): (Sender<RpcCommand>, Receiver<RpcCommand>) = mpsc::channel();
+            (Self {
+                sender: sender
+            }, Some(receiver))
+        }
+        #[cfg(not(feature = "rpc"))]
+        {
+            (Self {
+            }, None)
+        }
+    }
+    pub fn send_message(&self, command: RpcCommand) {
+        #[cfg(feature = "rpc")]
+        self.sender.send(command).unwrap();
+    }
+}
+// #[cfg(feature = "rpc")]
+// #[cfg(not(feature = "rpc"))]
 
 pub enum RpcCommand {
     Init(String, String, String, u64),
@@ -29,6 +61,10 @@ enum Init {
     Pretend,
 }
 
+#[cfg(not(feature = "rpc"))]
+pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {}
+
+#[cfg(feature = "rpc")]
 pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
     let mut drpc = Client::new(1003981361079668829);
     drpc.on_ready(|_ctx| ()).persist();

@@ -1,18 +1,38 @@
 use pancurses::MEVENT;
+#[cfg(feature = "mouse")]
 use super::crystal_manager::{PLAY, SHUFFLE, LOOP};
 use crate::modules::general::Action;
-use crate::modules::curses::{Ownership, draw_rpc_indc};
+#[cfg(feature = "mouse")]
+use crate::modules::curses::Ownership;
+#[cfg(feature = "mouse")]
+use crate::modules::curses::draw_rpc_indc;
 use crate::modules::general::GeneralState;
+#[cfg(feature = "mouse")]
 use crate::modules::tui_borrow::UI;
 use pancurses::Input;
-
+#[cfg(feature = "mouse")]
 #[derive(Copy, Clone)]
 pub struct MouseHit {
     pub owner: Ownership,
     pub local_x: usize,
     pub local_y: usize,
 }
+#[cfg(not(feature = "mouse"))]
+pub fn handle_mouse(    
+    _: MEVENT,
+    _: &GeneralState
+) -> Option<Action> {
+    None
+}
+#[cfg(not(feature = "mouse"))]
+pub fn action_to_key(
+    _: Action,
+    _: &mut GeneralState,
+) -> Option<Input> {
+    None
+}
 
+#[cfg(feature = "mouse")]
 pub fn resolve_hit(
     ui: &UI<Ownership>,
     x: usize,
@@ -33,7 +53,7 @@ pub fn resolve_hit(
             local_y: y - e.range_y.0,
         })
 }
-
+#[cfg(feature = "mouse")]
 pub fn hit_to_action(
     hit: MouseHit,
     general: &GeneralState,
@@ -65,6 +85,7 @@ pub fn hit_to_action(
     }
 }
 
+#[cfg(feature = "mouse")]
 pub fn handle_mouse(
     mevent: MEVENT,
     general: &GeneralState,
@@ -79,7 +100,7 @@ pub fn handle_mouse(
     let hit = resolve_hit(&general.ui, x, y)?;
     Some(hit_to_action(hit, general))
 }
-
+#[cfg(feature = "mouse")]
 pub fn action_to_key(
     action: Action,
     general: &mut GeneralState,

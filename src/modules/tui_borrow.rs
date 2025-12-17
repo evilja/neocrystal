@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use pancurses::{COLOR_PAIR, Window};
 
 type Range = (usize, usize);

@@ -1,9 +1,10 @@
 extern crate glob;
 extern crate pancurses;
 use crate::modules::audio::{AudioCommand, AudioReportAction};
-use crate::modules::mouse::{self, action_to_key};
+use crate::modules::mouse::{self};
+use crate::modules::presence;
 use pancurses::{initscr, Input};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self};
 use std::time::Instant;
 use super::general::{GeneralState, Action};
@@ -71,14 +72,21 @@ macro_rules! get_input_or_report {
 
 
 pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAction>) -> bool {
-    let (rpctx, rpcrx): (Sender<RpcCommand>, Receiver<RpcCommand>) = mpsc::channel();
     let mut window = initscr();
 
     let mut general: GeneralState = GeneralState::new();
 
-    let _rpc_thread = thread::spawn(move || {
-        rpc_handler(rpcrx);
-    });
+    
+    let rpc_comm = {
+        let (rpc_comm, receiver) = presence::RpcCommunication::new();
+        if let Some(rx) = receiver {
+            let _rpc_thread = thread::spawn(move || {
+                rpc_handler(rx);
+            });
+        }
+        rpc_comm
+    };
+
 
     init_curses(&mut window);
     draw_frame(&mut window);
@@ -140,7 +148,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 if let Ok(mevent) = pancurses::getmouse() {
                     if let Some(action) = mouse::handle_mouse(mevent, &general) {
                         general.action = action;
-                        if let Some(nk) = action_to_key(action, &mut general) {
+                        if let Some(nk) = mouse::action_to_key(action, &mut general) {
                             key = nk;
                         }
                     }
@@ -175,7 +183,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 Input::KeyF14 => {
                     //duration sent
                     if general.rpc.timer <= Instant::now() && general.rpc.reinit {
-                        general.handle_rpc(&rpctx);
+                        general.handle_rpc(&rpc_comm);
                         draw_rpc_indc(&mut general);
                     }
                     draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
@@ -217,6 +225,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_rpc_indc(&mut general);
                     draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
                     match general.action {
+                        #[cfg(feature = "mouse")]
                         Action::Play(_, _) => {
                             draw_song_text(&mut general);
                         }
@@ -237,7 +246,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 Input::Character(STOP) => {
                     general.songs.stop();
                     tx.send(AudioCommand::Pause).unwrap();
-                    rpctx.send(RpcCommand::Clear).unwrap();
+                    rpc_comm.send_message(RpcCommand::Clear);
                     draw_song_indicators(&mut general);
                 }
 
@@ -318,7 +327,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
             }
         }
     }
-    match rpctx.send(RpcCommand::Stop) {
+    match rpc_comm.send_message(RpcCommand::Stop) {
         _ => (),
     }
     exit_curses(&mut window);

@@ -3,13 +3,18 @@ name = "neocrystal"
 version = "1.5.0"
 edition = "2024"
 
+[features]
+default = ["rpc"]
+
+rpc = ["discord-presence"]
+mouse = []
+
 [dependencies]
-discord-presence = "2.1.0"
+discord-presence = { version = "2.1.0", optional = true }
 glob = "0.3.3"
 mp3-duration = "0.1.10"
 rand = "0.9.2"
 rodio = "0.21.1"
-libc = "0.2"
 id3 = "1.16.3"
 home = "0.5"
 unicode-width = "0.2.2"

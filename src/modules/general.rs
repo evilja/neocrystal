@@ -1,9 +1,8 @@
 use std::time::{Duration, Instant};
 use super::curses::Ownership;
-use crate::modules::presence::RpcCommand;
+use crate::modules::presence::{RpcCommand, RpcCommunication};
 use crate::modules::songs::absolute_index;
 use crate::modules::utils::ReinitMode;
-use std::sync::mpsc::Sender;
 use crate::modules::presence::rpc_init_autobuild;
 use glob::glob;
 use home::home_dir;
@@ -43,11 +42,11 @@ impl GeneralState {
         ));
     }
 
-    pub fn handle_rpc(&mut self, rpctx: &Sender<RpcCommand>) {
+    pub fn handle_rpc(&mut self, comm: &RpcCommunication) {
         match self.rpc.mode {
             ReinitMode::None => (),
             ReinitMode::Renew => {
-                let _ = rpctx.send(RpcCommand::Renew(
+                comm.send_message(RpcCommand::Renew(
                     self.timer
                         .maxlen
                         .checked_sub(self.timer.fcalc)
@@ -56,7 +55,7 @@ impl GeneralState {
                 ));
             }
             ReinitMode::Pretend => {
-                let _ = rpctx.send(RpcCommand::Pretend(
+                comm.send_message(RpcCommand::Pretend(
                     self.timer
                         .maxlen
                         .checked_sub(self.timer.fcalc)
@@ -65,7 +64,7 @@ impl GeneralState {
                 ));
             }
             ReinitMode::Init => {
-                let _ = rpctx.send(rpc_init_autobuild(
+                comm.send_message(rpc_init_autobuild(
                     &self.songs,
                     self.timer.maxlen.as_secs_f32() as u64,
                 ));
@@ -87,7 +86,7 @@ impl GeneralState {
                 spint: false,
                 isloop: false,
                 desel: false,
-                mouse_support: false,
+                mouse_support: true,
                 needs_update: true,
             },
             volume: Volume {
@@ -128,6 +127,7 @@ fn globwrap() -> Vec<String> {
 
 } 
 
+#[cfg(feature = "mouse")]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Action {
     Play(usize, usize),
@@ -137,4 +137,10 @@ pub enum Action {
     PgDown,
     PgUp,
     Nothing,
+}
+
+#[cfg(not(feature = "mouse"))]
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Action {
+    Nothing
 }

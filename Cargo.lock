@@ -456,7 +456,6 @@ dependencies = [
  "glob",
  "home",
  "id3",
- "libc",
  "mp3-duration",
  "pancurses",
  "rand",
