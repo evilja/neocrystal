@@ -2,6 +2,8 @@ use pancurses::{
     Window, ACS_HLINE, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, ACS_ULCORNER,
     ACS_URCORNER, ACS_VLINE, COLOR_PAIR, mousemask
 };
+#[cfg(not(feature = "rpc"))]
+use std::sync::Mutex;
 use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 const MAXX: usize = 50;
@@ -263,15 +265,13 @@ pub fn draw_artist(general: &mut GeneralState) {
     );
 }
 
-#[allow(unreachable_patterns)]
+#[cfg(feature = "rpc")]
 pub fn draw_rpc_indc(general: &mut GeneralState) {
     general.ui.write(
         &Ownership::RpcInd,
         0,
         0,
         match general.rpc.mode {
-            #[cfg(not(feature = "rpc"))]
-            _ => "no",
             ReinitMode::Init => "int",
             ReinitMode::Renew | ReinitMode::Pretend => "rnw",
             ReinitMode::None => "yes",
@@ -279,13 +279,22 @@ pub fn draw_rpc_indc(general: &mut GeneralState) {
         .into()
         ,
         match general.rpc.mode {
-            #[cfg(not(feature = "rpc"))]
-            _ => 2,
             ReinitMode::None => 1,
             ReinitMode::Renew | ReinitMode::Pretend => 4,
             ReinitMode::Init => 2,
         }
     );
+}
+
+#[cfg(not(feature = "rpc"))]
+pub fn draw_rpc_indc(_: &mut GeneralState) {
+    general.ui.write(
+        &Ownership::RpcInd,
+        0,
+        0,
+        "no".into(),
+        2
+    )
 }
 
 pub fn draw_vol_indc(general: &mut GeneralState) {
