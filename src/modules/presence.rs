@@ -1,8 +1,13 @@
 use crate::modules::songs::Songs;
+use crate::modules::utils::Timer;
 use std::sync::mpsc::Receiver;
+#[cfg(feature = "rpc")]
 use std::sync::mpsc::{Sender, self};
+#[cfg(feature = "rpc")]
 use std::thread;
+#[cfg(feature = "rpc")]
 use std::time::Duration;
+#[cfg(feature = "rpc")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "rpc")]
@@ -29,14 +34,14 @@ impl RpcCommunication {
             }, None)
         }
     }
-    pub fn send_message(&self, command: RpcCommand) {
+    pub fn send_message(&self, _command: RpcCommand) {
         #[cfg(feature = "rpc")]
-        self.sender.send(command).unwrap();
+        self.sender.send(_command).unwrap();
     }
 }
 // #[cfg(feature = "rpc")]
 // #[cfg(not(feature = "rpc"))]
-
+#[cfg(feature = "rpc")]
 pub enum RpcCommand {
     Init(String, String, String, u64),
     Renew(u64),
@@ -44,16 +49,54 @@ pub enum RpcCommand {
     Clear,
     Pretend(u64),
 }
-
-pub fn rpc_init_autobuild(songs: &Songs, stamp: u64) -> RpcCommand {
-    RpcCommand::Init(
-        songs.current_name(),
-        songs.current_artist(),
-        songs.current_playlist(),
-        stamp,
-    )
+#[cfg(not(feature = "rpc"))]
+pub enum RpcCommand {
+    Init,
+    Renew,
+    Stop,
+    Clear,
+    Pretend,
+}
+pub fn rpc_init_autobuild(_songs: &Songs, _stamp: u64) -> RpcCommand {
+    #[cfg(feature = "rpc")]
+    return RpcCommand::Init(
+        _songs.current_name(),
+        _songs.current_artist(),
+        _songs.current_playlist(),
+        _stamp,
+    );
+    #[cfg(not(feature = "rpc"))]
+    return RpcCommand::Init;
 }
 
+pub fn rpc_rnw_autobuild(_timer: &Timer) -> RpcCommand {
+    #[cfg(feature = "rpc")]
+    return RpcCommand::Renew(
+        _timer
+            .maxlen
+            .checked_sub(_timer.fcalc)
+            .unwrap_or_default()
+            .as_secs(), // elapsed time as u64
+    );
+
+    #[cfg(not(feature = "rpc"))]
+    return RpcCommand::Renew;
+}
+pub fn rpc_pretend_autobuild(_timer: &Timer) -> RpcCommand {
+    #[cfg(feature = "rpc")]
+    return RpcCommand::Pretend(
+        _timer
+            .maxlen
+            .checked_sub(_timer.fcalc)
+            .unwrap_or_default()
+            .as_secs(), // elapsed time as u64
+    );
+
+    #[cfg(not(feature = "rpc"))]
+    return RpcCommand::Pretend;
+}
+
+#[cfg(feature = "rpc")]
 #[derive(PartialEq)]
 enum Init {
     Yes,
@@ -62,7 +105,7 @@ enum Init {
 }
 
 #[cfg(not(feature = "rpc"))]
-pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {}
+pub fn rpc_handler(_: Receiver<RpcCommand>) {}
 
 #[cfg(feature = "rpc")]
 pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
@@ -137,9 +180,14 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
                                 ass.large_image("001")
                                     .large_text(&plist)
                                     .small_image("github")
-                                    .small_text("github.com/evilja/neo-crystal-plus")
+                                    .small_text("github.com/evilja/neocrystal")
                             })
                             .timestamps(|ts| ts.start(st_ts.1).end(ed_ts.1))
+                            .append_buttons(|a| {
+                                a
+                                .label("GitHub")
+                                .url("https://github.com/evilja/neocrystal")
+                            })
                     }) {
                         Ok(_) => break,
                         Err(_) => thread::sleep(Duration::from_secs(3)),

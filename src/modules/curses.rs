@@ -263,18 +263,28 @@ pub fn draw_artist(general: &mut GeneralState) {
     );
 }
 
+#[allow(unreachable_patterns)]
 pub fn draw_rpc_indc(general: &mut GeneralState) {
     general.ui.write(
         &Ownership::RpcInd,
         0,
         0,
         match general.rpc.mode {
+            #[cfg(not(feature = "rpc"))]
+            _ => "no",
             ReinitMode::Init => "int",
             ReinitMode::Renew | ReinitMode::Pretend => "rnw",
             ReinitMode::None => "yes",
         }
-        .into(),
-        if general.rpc.mode == ReinitMode::None { 1 } else if general.rpc.mode == ReinitMode::Init { 2 } else { 4 },
+        .into()
+        ,
+        match general.rpc.mode {
+            #[cfg(not(feature = "rpc"))]
+            _ => 2,
+            ReinitMode::None => 1,
+            ReinitMode::Renew | ReinitMode::Pretend => 4,
+            ReinitMode::Init => 2,
+        }
     );
 }
 

@@ -1,9 +1,8 @@
 use std::time::{Duration, Instant};
 use super::curses::Ownership;
-use crate::modules::presence::{RpcCommand, RpcCommunication};
+use crate::modules::presence::{RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild};
 use crate::modules::songs::absolute_index;
 use crate::modules::utils::ReinitMode;
-use crate::modules::presence::rpc_init_autobuild;
 use glob::glob;
 use home::home_dir;
 
@@ -46,22 +45,10 @@ impl GeneralState {
         match self.rpc.mode {
             ReinitMode::None => (),
             ReinitMode::Renew => {
-                comm.send_message(RpcCommand::Renew(
-                    self.timer
-                        .maxlen
-                        .checked_sub(self.timer.fcalc)
-                        .unwrap_or_default()
-                        .as_secs(), // elapsed time as u64
-                ));
+                comm.send_message(rpc_rnw_autobuild(&self.timer));
             }
             ReinitMode::Pretend => {
-                comm.send_message(RpcCommand::Pretend(
-                    self.timer
-                        .maxlen
-                        .checked_sub(self.timer.fcalc)
-                        .unwrap_or_default()
-                        .as_secs(), // elapsed time as u64
-                ));
+                comm.send_message(rpc_pretend_autobuild(&self.timer));
             }
             ReinitMode::Init => {
                 comm.send_message(rpc_init_autobuild(
