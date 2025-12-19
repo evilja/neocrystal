@@ -111,7 +111,7 @@ impl Songs {
 
     pub fn current_playlist(&self) -> String {
         if self.stophandler {
-            return "Not playing".to_string();
+            return "".to_string();
         }
 
         match self
@@ -121,12 +121,12 @@ impl Songs {
         {
             Some(something) => {
                 if something == "" {
-                    "No playlist".to_string()
+                    "".to_string()
                 } else {
                     something
                 }
             }
-            None => "No playlist".to_string(),
+            None => "".to_string(),
         }
     }
 

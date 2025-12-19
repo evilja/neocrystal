@@ -8,7 +8,7 @@ use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 const MAXX: usize = 50;
 const MAXY: usize = 20;
-use crate::modules::{utils::ReinitMode};
+use crate::modules::{general::NcursesExec, utils::ReinitMode};
 
 use super::general::GeneralState;
 
@@ -54,16 +54,16 @@ pub fn autoalloc(general: &mut GeneralState) {
     general.ui.alloc(&Ownership::Playlist,(2, 12), (16, 1));
     general.ui.alloc(&Ownership::Sliding, (14, 23),(16, 1));
     general.ui.alloc(&Ownership::ShuRep,  (2, 8),  (17, 1));
-    general.ui.alloc(&Ownership::Time1,   (12, 4), (17, 1));
-    general.ui.alloc(&Ownership::Time2,   (34, 4), (17, 1));
+    general.ui.alloc(&Ownership::Time1,   (12, 5), (17, 1));
+    general.ui.alloc(&Ownership::Time2,   (34, 5), (17, 1));
     general.ui.alloc(&Ownership::ShuInd,  (2, 3),  (18, 1));
     general.ui.alloc(&Ownership::LoopInd, (6, 3),  (18, 1));
     general.ui.alloc(&Ownership::Artist,  (12, 27),(18, 1));
     general.ui.alloc(&Ownership::RpcVol,  (41, 7), (17, 1));
     general.ui.alloc(&Ownership::RpcInd,  (41, 3), (18, 1));
     general.ui.alloc(&Ownership::VolInd,  (45, 3), (18, 1));
-    general.ui.c_alloc(&Ownership::Search,  (2, 32), (0, 1), Some(ACS_HLINE()));
-    general.ui.c_alloc(&Ownership::Page,    (35, 13),(0, 1), Some(ACS_HLINE()));
+    general.ui.c_alloc(&Ownership::Search,  (2, 32), (0, 1), Some("─".to_string()));
+    general.ui.c_alloc(&Ownership::Page,    (35, 13),(0, 1), Some("─".to_string()));
     /* ---------------- END ALLOCATION ---------------- */
 
 }
@@ -99,20 +99,21 @@ pub fn draw_page(general: &mut GeneralState) {
         &Ownership::Page,
         0,
         0,
-        format!("< Page: {}/{} >", cur_page, max_page.max(1)),
+        &format!("< Page: {}/{} >", cur_page, max_page.max(1)),
         0,
     );
 }
 
 pub fn draw_search(general: &mut GeneralState) {
+    let _x = format!("Search: {}", general.searchquery.query);
     general.ui.write(
         &Ownership::Search,
         0,
         0,
         if general.searchquery.mode == 0 {
-            "Search or edit".to_string()
+            "Search or edit"
         } else {
-            format!("Search: {}", general.searchquery.query)
+            &_x
         },
         9,
     );
@@ -140,24 +141,24 @@ pub fn draw_song_indicators(general: &mut GeneralState) {
         let original = general.songs.filtered_songs[abs];
 
         let mark = if abs == current {
-            '>'
+            ">"
         } else if original == next && !general.state.isloop {
-            '*'
+            "*"
         } else if general.songs.is_blacklist(original) {
-            'x'
+            "x"
         } else {
-            ' '
+            " "
         };
 
         general.ui.write(
             &Ownership::SongInd,
             0,
             row,
-            mark.to_string(),
+            mark,
             match mark {
-                '>' => 1,
-                '*' => 4,
-                'x' => 2,
+                ">" => 1,
+                "*" => 4,
+                "x" => 2,
                 _   => 0,
             },
         );
@@ -189,7 +190,7 @@ pub fn draw_song_text(general: &mut GeneralState) {
             &Ownership::Songs,
             0,
             row,
-            song.name.clone(),
+            &song.name,
             if general.index.index == row && !general.state.desel { 3 } else { 0 },
         );
 
@@ -208,7 +209,7 @@ pub fn draw_playlist(general: &mut GeneralState) {
         &Ownership::Playlist,
         0,
         0,
-        general.songs.current_playlist(),
+        &general.songs.current_playlist(),
         0,
     );
 }
@@ -219,14 +220,14 @@ pub fn draw_sliding(general: &mut GeneralState) {
         (general.ui.get_range(&Ownership::Sliding).unwrap() / 2)
             .saturating_sub(sliding.width() / 2),
         0,
-        sliding,
+        &sliding,
         1,
     );
 }
 
 pub fn draw_const(general: &mut GeneralState) {
-    general.ui.write(&Ownership::ShuRep, 0, 0, "Shu Rep".to_string(), 0);
-    general.ui.write(&Ownership::RpcVol, 0, 0, "Rpc Vol".to_string(), 0);
+    general.ui.write(&Ownership::ShuRep, 0, 0, "Shu Rep", 0);
+    general.ui.write(&Ownership::RpcVol, 0, 0, "Rpc Vol", 0);
 }
 
 pub fn draw_shuffle_indc(general: &mut GeneralState) {
@@ -248,10 +249,10 @@ pub fn draw_loop_indc(general: &mut GeneralState) {
     );
 }
 pub fn draw_time_cur(general: &mut GeneralState) {
-    general.ui.write(&Ownership::Time1, 0, 0, to_mm_ss(general.timer.maxlen - general.timer.fcalc), 0);
+    general.ui.write(&Ownership::Time1, 0, 0, &to_mm_ss(general.timer.maxlen - general.timer.fcalc), 0);
 }
 pub fn draw_time_max(general: &mut GeneralState) {
-    general.ui.write(&Ownership::Time2, 0, 0, to_mm_ss(general.timer.maxlen), 0);
+    general.ui.write(&Ownership::Time2, 0, 0, &to_mm_ss(general.timer.maxlen), 0);
 }
 pub fn draw_artist(general: &mut GeneralState) {
     let artist = general.songs.current_artist();
@@ -260,7 +261,7 @@ pub fn draw_artist(general: &mut GeneralState) {
         (general.ui.get_range(&Ownership::Artist).unwrap() / 2)
             .saturating_sub(artist.width() / 2),
         0,
-        artist,
+        &artist,
         0,
     );
 }
@@ -302,7 +303,7 @@ pub fn draw_vol_indc(general: &mut GeneralState) {
         &Ownership::VolInd,
         0,
         0,
-        format!("{:>3}", general.volume.steps),
+        &format!("{:>3}", general.volume.steps),
         0,
     );
 }
@@ -349,9 +350,7 @@ pub fn draw_all(general: &mut GeneralState, window: &mut Window) {
 }
 
 pub fn update(general: &mut GeneralState, window: &mut Window) {
-    general.ui.draw(window);
-    window.noutrefresh();
-    pancurses::doupdate();
+    general.ui.draw::<Window, NcursesExec>(window);
 }
 
 pub fn init_curses(window: &mut Window) {

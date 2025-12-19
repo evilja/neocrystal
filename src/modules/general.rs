@@ -2,9 +2,11 @@ use std::time::{Duration, Instant};
 use super::curses::Ownership;
 use crate::modules::presence::{RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild};
 use crate::modules::songs::absolute_index;
+use crate::modules::tui_borrow::{ColorIntegerSize, Execute};
 use crate::modules::utils::ReinitMode;
 use glob::glob;
 use home::home_dir;
+use pancurses::{COLOR_PAIR, Window};
 
 
 use super::utils::{
@@ -18,6 +20,30 @@ use super::utils::{
 };
 use super::tui_borrow::{UI};
 use super::songs::Songs;
+
+
+pub struct NcursesExec;
+
+impl Execute<Window> for NcursesExec {
+    fn cursor(x: usize, y: usize, w: &mut Window) {
+        w.mv(y as i32, x as i32);
+    }
+
+    fn blob(ptr: *const u8, len: usize, color: ColorIntegerSize, w: &mut Window) {
+        w.attron(COLOR_PAIR(color));
+        unsafe {
+            let bytes = std::slice::from_raw_parts(ptr, len);
+            let s = std::str::from_utf8_unchecked(bytes);
+            w.addstr(s);
+        }
+        w.attroff(COLOR_PAIR(color));
+    }
+
+    fn flush(w: &mut Window) {
+        w.refresh();
+    }
+}
+
 
 pub struct GeneralState {
     pub index: Indexer,
