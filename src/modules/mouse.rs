@@ -8,7 +8,7 @@ use crate::modules::curses::Ownership;
 use crate::modules::curses::draw_rpc_indc;
 use crate::modules::general::GeneralState;
 #[cfg(feature = "mouse")]
-use crate::modules::tui_borrow::UI;
+use crate::modules::tui_ir::UI;
 use pancurses::Input;
 #[cfg(feature = "mouse")]
 #[derive(Copy, Clone)]

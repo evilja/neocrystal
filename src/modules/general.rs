@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 use super::curses::Ownership;
 use crate::modules::presence::{RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild};
 use crate::modules::songs::absolute_index;
-use crate::modules::tui_borrow::{ColorIntegerSize, Execute};
+use crate::modules::tui_ir::{ColorIntegerSize, Execute};
 use crate::modules::utils::ReinitMode;
 use glob::glob;
 use home::home_dir;
@@ -18,7 +18,7 @@ use super::utils::{
     SlidingText,
     SearchQuery
 };
-use super::tui_borrow::{UI};
+use super::tui_ir::{UI};
 use super::songs::Songs;
 
 
@@ -32,15 +32,14 @@ impl Execute<Window> for NcursesExec {
     fn blob(ptr: *const u8, len: usize, color: ColorIntegerSize, w: &mut Window) {
         w.attron(COLOR_PAIR(color));
         unsafe {
-            let bytes = std::slice::from_raw_parts(ptr, len);
-            let s = std::str::from_utf8_unchecked(bytes);
-            w.addstr(s);
+            w.addstr(std::str::from_utf8_unchecked(std::slice::from_raw_parts(ptr, len)));
         }
         w.attroff(COLOR_PAIR(color));
     }
 
     fn flush(w: &mut Window) {
-        w.refresh();
+        w.noutrefresh();
+        pancurses::doupdate();
     }
 }
 
@@ -67,7 +66,7 @@ impl GeneralState {
         ));
     }
 
-    pub fn handle_rpc(&mut self, comm: &RpcCommunication) {
+    pub fn handle_rpc(&mut self, comm: &RpcCommunication, instant: Instant) {
         match self.rpc.mode {
             ReinitMode::None => (),
             ReinitMode::Renew => {
@@ -80,6 +79,7 @@ impl GeneralState {
                 comm.send_message(rpc_init_autobuild(
                     &self.songs,
                     self.timer.maxlen.as_secs_f32() as u64,
+                    instant
                 ));
             }
         }

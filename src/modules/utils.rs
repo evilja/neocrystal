@@ -66,6 +66,7 @@ use std::time::{Duration, Instant};
 
 pub struct SlidingText {
     graphemes: Vec<String>,
+    grapheme_width: usize,
     width: usize,
     offset: usize,
     last_tick: Instant,
@@ -79,6 +80,7 @@ impl SlidingText {
 
         Self {
             graphemes,
+            grapheme_width: 0,
             width,
             offset: 0,
             last_tick: Instant::now(),
@@ -86,9 +88,14 @@ impl SlidingText {
         }
     }
 
+    pub fn is_changing(&mut self) -> bool {
+        !(self.grapheme_width <= self.width)
+    }
+
     pub fn reset_to(&mut self, new_text: impl Into<String>) {
         let text = new_text.into() + "   ";
         self.graphemes = text.graphemes(true).map(|g| g.to_string()).collect();
+        self.grapheme_width = self.graphemes.iter().map(|g| g.width()).sum();
         self.offset = 0;
         self.last_tick = Instant::now();
     }
@@ -107,12 +114,7 @@ impl SlidingText {
             return String::new();
         }
 
-        // compute full display width
-        let full_width: usize = self.graphemes.iter().map(|g| g.width()).sum();
-
-        // SPECIAL CASE: Remove "   " padding when the text fits (your original behavior)
-        // Check if last 3 graphemes are spaces AND full text fits in the provided width
-        if full_width <= self.width {
+        if self.grapheme_width <= self.width {
             // Trim exactly 3 trailing graphemes
             let trimmed = &self.graphemes[..self.graphemes.len().saturating_sub(3)];
             return trimmed.concat();
@@ -184,7 +186,7 @@ pub struct Indexer {
 impl RpcState {
     fn _init(&mut self) {
         self.reinit = true;
-        self.timer = Instant::now() + Duration::from_secs(3);   
+        self.timer = Instant::now() + Duration::from_secs(1);   
     }
 
     pub fn renew(&mut self) {

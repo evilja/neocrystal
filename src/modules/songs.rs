@@ -142,8 +142,10 @@ impl Songs {
     }
 
     pub fn set_next(&mut self, original_index: usize) {
-        self.setnext = self.filtered_songs[original_index];
-        self.all_songs[self.setnext].forced = true;
+        if let Some(&idx) = self.filtered_songs.get(original_index) {
+            self.setnext = idx;
+            self.all_songs[self.setnext].forced = true;
+        }
     }
 
     pub fn get_next(&self) -> usize {
@@ -316,7 +318,7 @@ impl Songs {
                     return Ok(i);
                 }
             }
-            for &i in self.filtered_songs.iter().take(start.saturating_sub(1)) {
+            for &i in self.filtered_songs.iter().take(start) {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }

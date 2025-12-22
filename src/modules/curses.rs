@@ -1,13 +1,9 @@
 use pancurses::{
-    Window, ACS_HLINE, ACS_LLCORNER, ACS_LRCORNER, ACS_LTEE, ACS_RTEE, ACS_ULCORNER,
-    ACS_URCORNER, ACS_VLINE, COLOR_PAIR, mousemask
+    Window, mousemask
 };
-#[cfg(not(feature = "rpc"))]
-use std::sync::Mutex;
+
 use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
-const MAXX: usize = 50;
-const MAXY: usize = 20;
 use crate::modules::{general::NcursesExec, utils::ReinitMode};
 
 use super::general::GeneralState;
@@ -45,6 +41,7 @@ pub enum Ownership {
     VolInd,
     Search,
     Page,
+    Progress,
 }
 
 pub fn autoalloc(general: &mut GeneralState) {
@@ -64,29 +61,23 @@ pub fn autoalloc(general: &mut GeneralState) {
     general.ui.alloc(&Ownership::VolInd,  (45, 3), (18, 1));
     general.ui.c_alloc(&Ownership::Search,  (2, 32), (0, 1), Some("─".to_string()));
     general.ui.c_alloc(&Ownership::Page,    (35, 13),(0, 1), Some("─".to_string()));
+    general.ui.c_alloc(&Ownership::Progress, (18, 15), (17,1), Some("─".to_string()));
     /* ---------------- END ALLOCATION ---------------- */
 
 }
 
-pub fn draw_frame(window: &Window) {
-    window.clear();
-    window.border(
-        ACS_VLINE(),
-        ACS_VLINE(),
-        ACS_HLINE(),
-        ACS_HLINE(),
-        ACS_ULCORNER(),
-        ACS_URCORNER(),
-        ACS_LLCORNER(),
-        ACS_LRCORNER(),
-    );
-
-    window.mv(MAXY as i32 - 5, 0);
-    window.addch(ACS_LTEE());
-    for _ in 0..(MAXX - 2) {
-        window.addch(ACS_HLINE());
-    }
-    window.addch(ACS_RTEE());
+pub fn draw_frame(general: &mut GeneralState) {
+    general.ui.inject_si(0, 0, "┌", 0);
+    general.ui.inject_si(49, 0, "┐", 0);
+    general.ui.inject_si(0, 19, "└", 0);
+    general.ui.inject_si(49, 19, "┘", 0);
+    general.ui.inject_simx(1, 0, "──────", 0, 8);
+    general.ui.inject_simx(1, 15, "──────", 0, 8);
+    general.ui.inject_simx(1, 19, "──────", 0, 8);
+    general.ui.inject_simy(0, 1, "│", 0, 18);
+    general.ui.inject_simy(49, 1, "│", 0, 18);
+    general.ui.inject_si(0, 15, "├", 0);
+    general.ui.inject_si(49, 15, "┤", 0);
 }
 
 pub fn draw_page(general: &mut GeneralState) {
@@ -124,83 +115,111 @@ pub fn draw_header(general: &mut GeneralState) {
     draw_page(general);
 }
 
-pub fn draw_song_indicators(general: &mut GeneralState) {
-    let total = general.songs.filtered_songs.len();
-    let psize = general.songs.typical_page_size.max(1);
-
-    let page  = general.index.page.max(1);
-    let start = (page - 1) * psize;
-    let end   = (start + psize).min(total);
-
-    let current = general.songs.match_c();
-    let next    = general.songs.get_next();
-
-    let mut row = 0;
-
-    for abs in start..end {
-        let original = general.songs.filtered_songs[abs];
-
-        let mark = if abs == current {
-            ">"
-        } else if original == next && !general.state.isloop {
-            "*"
-        } else if general.songs.is_blacklist(original) {
-            "x"
-        } else {
-            " "
-        };
-
-        general.ui.write(
-            &Ownership::SongInd,
-            0,
-            row,
-            mark,
-            match mark {
-                ">" => 1,
-                "*" => 4,
-                "x" => 2,
-                _   => 0,
-            },
-        );
-
-        row += 1;
-    }
-
-    while row < psize {
-        general.ui.write(&Ownership::SongInd, 0, row, " ".into(), 0);
-        row += 1;
-    }
+pub struct PageData {
+    current: Option<usize>,
+    next:    Option<usize>,
+    blacklist: Vec<usize>,
+    select: usize,
 }
 
-pub fn draw_song_text(general: &mut GeneralState) {
-    let total = general.songs.filtered_songs.len();
-    let psize = general.songs.typical_page_size.max(1);
-
-    let page  = general.index.page.max(1);
-    let start = (page - 1) * psize;
-    let end   = (start + psize).min(total);
-
-    let mut row = 0;
-
-    for abs in start..end {
-        let original = general.songs.filtered_songs[abs];
-        let song     = &general.songs.all_songs[original];
-
-        general.ui.write(
-            &Ownership::Songs,
-            0,
-            row,
-            &song.name,
-            if general.index.index == row && !general.state.desel { 3 } else { 0 },
-        );
-
-        row += 1;
+impl PageData {
+    pub fn new() -> Self {
+        Self { current: None, next: None, blacklist: Vec::with_capacity(3), select: 0}
     }
+    fn get_name<'life>(&self, general: &'life mut GeneralState, idx: usize) -> String {
+        general.songs.all_songs[
+        general.songs.filtered_songs[(general.index.page.max(1) - 1) * general.songs.typical_page_size.max(1) + idx]].name.clone()
+    }
+    pub fn draw_unchanged_moved_page(&mut self, general: &mut GeneralState) {
+        if self.select == general.index.index {
+            return;
+        }
+        let name = &self.get_name(general, self.select);
+        if !general.state.desel {
+            general.ui.write(&Ownership::Songs, 0, self.select, name, 0);
+            general.ui.write(&Ownership::Songs, 0, general.index.index, 
+                &general.songs.all_songs[
+                    general.songs.filtered_songs[(general.index.page.max(1) - 1) * general.songs.typical_page_size.max(1) + general.index.index]].name, 3);
+        }
+        self.select = general.index.index;
+    }
+    pub fn draw_changed_moved_page(&mut self, general: &mut GeneralState) {
+        let total = general.songs.filtered_songs.len();
+        let psize = general.songs.typical_page_size.max(1);
 
-    // clear remaining rows
-    while row < psize {
-        general.ui.write(&Ownership::Songs, 0, row, "".into(), 0);
-        row += 1;
+        let page  = general.index.page.max(1);
+        let start = (page - 1) * psize;
+        let end   = (start + psize).min(total);
+
+        let mut row = 0;
+
+        for abs in start..end {
+            let original = general.songs.filtered_songs[abs];
+            let song     = &general.songs.all_songs[original];
+
+            general.ui.write(
+                &Ownership::Songs,
+                0,
+                row,
+                &song.name,
+                if general.index.index == row && !general.state.desel { 
+                    self.select = row;
+                    3 
+                } else { 0 },
+            );
+
+            row += 1;
+        }
+
+        // clear remaining rows
+        while row < psize {
+            general.ui.empty_instruction(&Ownership::Songs, row);
+            row += 1;
+        }
+
+    }
+    pub fn draw_indicators(&mut self, general: &mut GeneralState) {
+        if let Some(r) = self.current{
+            general.ui.empty_instruction(&Ownership::SongInd, r);
+        }
+        if let Some(r) = self.next {
+            general.ui.empty_instruction(&Ownership::SongInd, r);
+        }
+        for &r in &self.blacklist {
+            general.ui.empty_instruction(&Ownership::SongInd, r);
+        }
+        self.current = None;
+        self.next = None;
+        self.blacklist.clear();
+
+        let total = general.songs.filtered_songs.len();
+        let psize = general.songs.typical_page_size.max(1);
+
+        let page  = general.index.page.max(1);
+        let start = (page - 1) * psize;
+        let end   = (start + psize).min(total);
+
+        let current = general.songs.match_c();
+        let next    = general.songs.get_next();
+
+        let mut row = 0;
+
+        for abs in start..end {
+            let original = general.songs.filtered_songs[abs];
+
+            if abs == current {
+                self.current = Some(row);
+                general.ui.write(&Ownership::SongInd, 0, row, ">", 1);
+            } else if original == next && !general.state.isloop {
+                self.next = Some(row);
+                general.ui.write(&Ownership::SongInd, 0, row, "*", 4);
+            } else if general.songs.is_blacklist(original) {
+                self.blacklist.push(row);
+                general.ui.write(&Ownership::SongInd, 0, row, "x", 2);
+            }
+
+            row += 1;
+        }
     }
 }
 
@@ -322,30 +341,16 @@ pub fn draw_footer(general: &mut GeneralState) {
 }
 
 
-pub fn draw_progress(window: &Window, maxlen: Duration, fcalc: Duration) {
-    let start = MAXX as i32 / 2 - 7;
-
-    window.mv(MAXY as i32 - 3, start);
-    for _ in 0..15 {
-        window.addch(ACS_HLINE());
-    }
-
-    if maxlen != Duration::ZERO {
-        window.mv(MAXY as i32 - 3, start);
-        window.attron(COLOR_PAIR(1));
-        for _ in 0..calc(maxlen, fcalc) {
-            window.addch(ACS_HLINE());
-        }
-        window.attroff(COLOR_PAIR(1));
-    }
+pub fn draw_progress(general: &mut GeneralState) {
+    general.ui.write_simx(&Ownership::Progress, 0, 0, "─", 1, calc(general.timer.maxlen, general.timer.fcalc));
 }
 
-pub fn draw_all(general: &mut GeneralState, window: &mut Window) {
-    draw_frame(window);
-    draw_progress(window, general.timer.maxlen, general.timer.fcalc);
+pub fn draw_all(general: &mut GeneralState, page: &mut PageData) {
+    draw_frame(general);
+    draw_progress(general);
     draw_header(general);
-    draw_song_indicators(general);
-    draw_song_text(general);
+    page.draw_indicators(general);
+    page.draw_changed_moved_page(general);
     draw_footer(general);
 }
 

@@ -6,7 +6,7 @@ use crate::modules::presence;
 use pancurses::{initscr, Input};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self};
-use std::time::Instant;
+use std::time::{Instant};
 use super::general::{GeneralState, Action};
 
 use super::{
@@ -76,6 +76,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
 
     let mut general: GeneralState = GeneralState::new();
 
+    let mut page = PageData::new();
     
     let rpc_comm = {
         let (rpc_comm, receiver) = presence::RpcCommunication::new();
@@ -89,9 +90,8 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
 
 
     init_curses(&mut window);
-    draw_frame(&mut window);
     autoalloc(&mut general);
-    draw_all(&mut general, &mut window);
+    draw_all(&mut general, &mut page);
     loop {
         if general.state.needs_update {
             update(&mut general, &mut window);
@@ -113,8 +113,8 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                                 general.songs.search(&general.searchquery.query);
                                 general.index.index = 0;
                                 general.index.page = 1;
-                                draw_song_text(&mut general);
-                                draw_song_indicators(&mut general);
+                                page.draw_changed_moved_page(&mut general);
+                                page.draw_indicators(&mut general);
                             }
                             2 => {
                                 general.songs.set_artist(general.songs.match_c(), &general.searchquery.query);
@@ -144,7 +144,8 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     _ => {}
                 }
             }
-            if key == Input::KeyMouse && general.state.mouse_support {
+            if key == Input::KeyMouse {
+                if !(general.state.mouse_support) {continue;}
                 if let Ok(mevent) = pancurses::getmouse() {
                     if let Some(action) = mouse::handle_mouse(mevent, &general) {
                         general.action = action;
@@ -177,18 +178,20 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_sliding(&mut general);
                     draw_time_max(&mut general);
                     draw_time_cur(&mut general);
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                     draw_rpc_indc(&mut general);
                 }
                 Input::KeyF14 => {
                     //duration sent
                     if general.rpc.timer <= Instant::now() && general.rpc.reinit {
-                        general.handle_rpc(&rpc_comm);
+                        general.handle_rpc(&rpc_comm, general.rpc.timer);
                         draw_rpc_indc(&mut general);
                     }
-                    draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
+                    draw_progress(&mut general);
                     draw_time_cur(&mut general);
-                    draw_sliding(&mut general);
+                    if general.sliding.is_changing() {
+                        draw_sliding(&mut general);
+                    }
                 }
                 Input::Character(QUIT) => {
                     tx.send(AudioCommand::Stop).unwrap();
@@ -200,6 +203,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         Direction::Down,
                         &mut general,
                         &tx,
+                        &mut page
                     );
                 }
 
@@ -208,6 +212,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         Direction::Up,
                         &mut general,
                         &tx,
+                        &mut page
                     );
                 }
 
@@ -221,13 +226,13 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_sliding(&mut general);
                     draw_time_max(&mut general);
                     draw_time_cur(&mut general);
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                     draw_rpc_indc(&mut general);
-                    draw_progress(&window, general.timer.maxlen, general.timer.fcalc);
+                    draw_progress(&mut general);
                     match general.action {
                         #[cfg(feature = "mouse")]
                         Action::Play(_, _) => {
-                            draw_song_text(&mut general);
+                            page.draw_unchanged_moved_page(&mut general);
                         }
                         _ => (),
                     }
@@ -240,19 +245,19 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 Input::Character(LOOP) => {
                     general.state.isloop = !general.state.isloop;
                     draw_loop_indc(&mut general);
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                 }
 
                 Input::Character(STOP) => {
                     general.songs.stop();
                     tx.send(AudioCommand::Pause).unwrap();
                     rpc_comm.send_message(RpcCommand::Clear);
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                 }
 
                 Input::Character(BLACKLIST) => {
                     general.blacklist();
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                 }
 
                 Input::Character(RESUME) => {
@@ -262,7 +267,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     general.songs.stophandler = false;
                     tx.send(AudioCommand::Resume).unwrap();
                     general.rpc.pretend();
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                     draw_rpc_indc(&mut general);
                 }
                 Input::KeyRight | Input::Character(RIGHT) => {
@@ -277,7 +282,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 }
                 Input::Character(SHUFFLE) => {
                     general.songs.shuffle();
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                     draw_shuffle_indc(&mut general);
                 }
                 Input::Character(SEARCH) => {
@@ -285,7 +290,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_search(&mut general);
                 }
                 Input::Character(FULL) => {
-                    draw_all(&mut general, &mut window);
+                    draw_all(&mut general, &mut page);
                 }
                 Input::Character(CHANGE) => {
                     general.searchquery.to_mode(2);
@@ -301,22 +306,22 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         general.index.page,
                         general.songs.typical_page_size,
                     ));
-                    draw_song_indicators(&mut general);
+                    page.draw_indicators(&mut general);
                 }
                 Input::Character(DESEL) => {
                     general.state.desel = !general.state.desel;
-                    draw_song_text(&mut general);
+                    page.draw_changed_moved_page(&mut general);
                 }
                 Input::KeyPPage => {
-                    change_page(Direction::Up, &mut general);
-                    draw_song_indicators(&mut general);
-                    draw_song_text(&mut general);
+                    change_page(Direction::Up, &mut general, &mut page);
+                    page.draw_indicators(&mut general);
+                    page.draw_changed_moved_page(&mut general);
                     draw_page(&mut general);
                 }
                 Input::KeyNPage => {
-                    change_page(Direction::Down, &mut general);
-                    draw_song_indicators(&mut general);
-                    draw_song_text(&mut general);
+                    change_page(Direction::Down, &mut general, &mut page);
+                    page.draw_indicators(&mut general);
+                    page.draw_changed_moved_page(&mut general);
                     draw_page(&mut general);
                 }
                 Input::Character(MOUSE_SUPPORT) => {
@@ -357,7 +362,7 @@ pub fn play_current_song(
     }
 }
 
-pub fn change_page(dir: Direction, general: &mut GeneralState) {
+pub fn change_page(dir: Direction, general: &mut GeneralState, page: &mut PageData) {
     let psize = general.songs.typical_page_size.max(1);
     let total = general.songs.filtered_songs.len();
 
@@ -373,8 +378,8 @@ pub fn change_page(dir: Direction, general: &mut GeneralState) {
                 general.index.page -= 1;
                 general.index.index = 0;
                 draw_page(general);
-                draw_song_text(general);
-                draw_song_indicators(general);
+                page.draw_changed_moved_page(general);
+                page.draw_indicators(general);
             }
         }
 
@@ -383,8 +388,8 @@ pub fn change_page(dir: Direction, general: &mut GeneralState) {
                 general.index.page += 1;
                 general.index.index = 0;
                 draw_page(general);
-                draw_song_text(general);
-                draw_song_indicators(general);
+                page.draw_changed_moved_page(general);
+                page.draw_indicators(general);
             }
         }
     }
@@ -400,6 +405,7 @@ pub fn move_selection(
     direction: Direction,
     general: &mut GeneralState,
     tx: &Sender<AudioCommand>,
+    page: &mut PageData,
 ) {
     if general.state.spint {
         match direction {
@@ -409,16 +415,18 @@ pub fn move_selection(
         tx.send(AudioCommand::SetVolume(general.volume.as_f32()))
             .unwrap_or_else(|_| ());
         draw_vol_indc(general);
-    } else {
+    } else if !general.songs.filtered_songs.is_empty() {
         match direction {
             Direction::Up => {
                 if general.index.index > 0 {
                     general.index.index -= 1;
+                    page.draw_unchanged_moved_page(general);
                 } else if general.index.page > 1 {
                     general.index.page -= 1;
                     general.index.index = general.songs.typical_page_size - 1;
                     draw_page(general);
-                    draw_song_indicators(general);
+                    page.draw_indicators(general);
+                    page.draw_changed_moved_page(general);
                 }
             }
             Direction::Down => {
@@ -426,15 +434,15 @@ pub fn move_selection(
                     < general.songs.filtered_songs.len() - 1;
                 if general.index.index + 1 < general.songs.typical_page_size && absolute {
                     general.index.index += 1;
-                
+                    page.draw_unchanged_moved_page(general);
                 } else if absolute {
                     general.index.page += 1;
                     general.index.index = 0;
                     draw_page(general);
-                    draw_song_indicators(general);
+                    page.draw_indicators(general);
+                    page.draw_changed_moved_page(general);
                 }
             }
         }
-        draw_song_text(general);
     }
 }
