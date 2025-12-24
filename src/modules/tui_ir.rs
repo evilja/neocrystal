@@ -409,7 +409,6 @@ impl<Id: PartialEq + Copy> UI<Id> {
         if bytes.len() == 0 {
             return;
         }
-        let off = self.table.blob.len();
         self.table.fake_sim(bytes, x, y, color, l);
     }
     pub fn inject_simy(&mut self, x: usize, y: usize, text: &str, color: ColorIntegerSize, l: usize) {

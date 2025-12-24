@@ -58,14 +58,13 @@ pub enum RpcCommand {
     Clear,
     Pretend,
 }
-pub fn rpc_init_autobuild(_songs: &Songs, _stamp: u64, instant: Instant) -> RpcCommand {
+pub fn rpc_init_autobuild(_songs: &Songs, _stamp: u64, _instant: Instant) -> RpcCommand {
     #[cfg(feature = "rpc")]
     return RpcCommand::Init(
         _songs.current_name(),
         _songs.current_artist(),
         _stamp,
-        instant
-
+        _instant
     );
     #[cfg(not(feature = "rpc"))]
     return RpcCommand::Init;
@@ -105,11 +104,12 @@ enum Init {
     No,
     Pretend,
 }
-
+#[cfg(feature = "rpc")]
 struct Epoch {
     epoch: Duration,
     instant: Instant,
 }
+#[cfg(feature = "rpc")]
 impl Epoch {
     pub fn to_epoch(&self, instant: Instant) -> Duration {
         self.epoch + instant.duration_since(self.instant)

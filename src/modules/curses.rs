@@ -307,7 +307,7 @@ pub fn draw_rpc_indc(general: &mut GeneralState) {
 }
 
 #[cfg(not(feature = "rpc"))]
-pub fn draw_rpc_indc(_: &mut GeneralState) {
+pub fn draw_rpc_indc(general: &mut GeneralState) {
     general.ui.write(
         &Ownership::RpcInd,
         0,

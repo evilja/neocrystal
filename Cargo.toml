@@ -4,7 +4,7 @@ version = "1.5.0"
 edition = "2024"
 
 [features]
-default = ["rpc"]
+default = []
 
 rpc = ["discord-presence"]
 mouse = []
