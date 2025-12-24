@@ -69,7 +69,9 @@
 ///       attr 0
 ///       byte 447 3
 ///       bytes: [E2, 94, 82]
- 
+/// 
+use unicode_width::UnicodeWidthStr;
+
 
 type Range = (usize, usize);
 type Target = (usize, usize);
@@ -255,103 +257,140 @@ impl<Id: PartialEq + Copy> UI<Id> {
 
     }
     pub fn write(&mut self, id: &Id, mut x: usize, mut y: usize, text: &str, color: ColorIntegerSize) {
-        let (this_x, this_y, character) = {
+        let w = UnicodeWidthStr::width(text);
+        let b = text.as_bytes();
+
+        let (rx, ry, ch, cw) = {
             let o = match self.find(id) {
                 Some(o) => o,
                 None => return,
             };
-            (
-                o.range_x,
-                o.range_y,
-                o.character
-                    .as_deref()
-                    .map(|s| s.as_bytes())
-                    .unwrap_or(&[b' '])
-                    .repeat(o.range_x.1),
-            )
+            let s = o.character.as_deref().unwrap_or(" ");
+            (o.range_x, o.range_y, s.as_bytes().to_vec(), UnicodeWidthStr::width(s))
         };
+        x += rx.0;
+        y += ry.0;
 
-        x += this_x.0;
-        y += this_y.0;
-
-        if self.idx(this_x.0, y).is_none() {
+        if self.idx(rx.0, y).is_none() {
             return;
         }
-        let bytes = text.as_bytes();
-        if !blob_fit(x, bytes.len(), this_x) {return;}
-        if bytes.len() >= character.len() {
-        } else {
-            self.table.si_blob(&character, this_x.0, y, 0);
+
+        if !blob_fit(x, w, rx) {
+            return;
         }
-        if bytes.len() == 0 {return;}
-        self.table.si_blob(bytes, x, y, color);
+
+        if cw > 0 {
+            if x == rx.0 {
+                let reps = rx.1.saturating_sub(w) / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0 + w, y, 0, reps);
+                }
+            } else {
+                let reps = rx.1 / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0, y, 0, reps);
+                }
+            }
+        }
+
+        if b.len() == 0 {
+            return;
+        }
+        self.table.si_blob(b, x, y, color);
     }
+
 
     pub fn write_simy(&mut self, id: &Id, mut x: usize, mut y: usize, text: &str, color: ColorIntegerSize, l: usize) {
-        let (this_x, this_y, character) = {
+        let w = UnicodeWidthStr::width(text);
+        let b = text.as_bytes();
+
+        let (rx, ry, ch, cw) = {
             let o = match self.find(id) {
                 Some(o) => o,
                 None => return,
             };
-            (
-                o.range_x,
-                o.range_y,
-                o.character
-                    .as_deref()
-                    .map(|s| s.as_bytes())
-                    .unwrap_or(&[b' '])
-                    .repeat(o.range_x.1),
-            )
+            let s = o.character.as_deref().unwrap_or(" ");
+            (o.range_x, o.range_y, s.as_bytes().to_vec(), UnicodeWidthStr::width(s))
         };
 
-        x += this_x.0;
-        y += this_y.0;
+        x += rx.0;
+        y += ry.0;
 
-        if self.idx(this_x.0, y).is_none() {
+        if self.idx(rx.0, y).is_none() {
             return;
         }
-        let bytes = text.as_bytes();
-        if !blob_fit(x, bytes.len(), this_x) && !blob_fit(y, l, this_y) {return;}
-        if bytes.len() >= character.len() {
-        } else {
-            self.table.si_blob(&character, this_x.0, y, 0);
+        if !blob_fit(x, w, rx) || !blob_fit(y, l, ry) {
+            return;
         }
-        if bytes.len() == 0 {return;}
-        self.table.sim_blob(bytes, x, y, color, l);
+
+        if cw > 0 {
+            if x == rx.0 {
+                let cols = rx.1.saturating_sub(w);
+                let reps = cols / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0 + w, y, 0, reps);
+                }
+            } else {
+                let reps = rx.1 / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0, y, 0, reps);
+                }
+            }
+        }
+
+        if l == 0 {
+            return;
+        }
+
+        self.table.sim_blob(b, x, y, color, l);
     }
+
+
 
     pub fn write_simx(&mut self, id: &Id, mut x: usize, mut y: usize, text: &str, color: ColorIntegerSize, l: usize) {
-        let (this_x, this_y, character) = {
+
+        let w = UnicodeWidthStr::width(text) * l;
+        let b = text.as_bytes();
+
+        let (rx, ry, ch, cw) = {
             let o = match self.find(id) {
                 Some(o) => o,
                 None => return,
             };
-            (
-                o.range_x,
-                o.range_y,
-                o.character
-                    .as_deref()
-                    .map(|s| s.as_bytes())
-                    .unwrap_or(&[b' '])
-                    .repeat(o.range_x.1),
-            )
+            let s = o.character.as_deref().unwrap_or(" ");
+            (o.range_x, o.range_y, s.as_bytes().to_vec(), UnicodeWidthStr::width(s))
         };
 
-        x += this_x.0;
-        y += this_y.0;
+        x += rx.0;
+        y += ry.0;
 
-        if self.idx(this_x.0, y).is_none() {
+        if self.idx(rx.0, y).is_none() {
             return;
         }
-        let bytes = text.as_bytes();
-        if !blob_fit(x, bytes.len(), this_x) {return;}
-        if bytes.len() * l >= character.len() {
-        } else {
-            self.table.si_blob(&character, this_x.0, y, 0);
+        if !blob_fit(x, w, rx) {
+            return;
         }
-        if bytes.len() == 0 || l == 0 {return;}
-        self.table.fake_sim(bytes, x, y, color, l);
+
+        if cw > 0 {
+            if x == rx.0 {
+                let cols = rx.1.saturating_sub(w);
+                let reps = cols / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0 + w, y, 0, reps);
+                }
+            } else {
+                let reps = rx.1 / cw;
+                if reps > 0 {
+                    self.table.fake_sim(&ch, rx.0, y, 0, reps);
+                }
+            }
+        }
+        if l == 0 {
+            return;
+        }
+        self.table.fake_sim(b, x, y, color, l);
     }
+
     /// This function does not participate in the UI logic.
     /// It is for when you don't want to allocate at all because
     /// you'll use it only once. Like drawing borders.
