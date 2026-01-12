@@ -1,55 +1,47 @@
-This application is written in Rustlang.
+This app is written in Rust and is opiniated.
 
-binary:
+It supports mp3 only (you can change that easily i think, just make the constructor function of Songs see .flac files, though i'm not sure if mp3-duration library would work.)
 
-look up to releases and use the latest one. you need a music/ folder at binary location.
+It is meant for keyboard usage but there is a limited mouse support too, like clicking on songs or control buttons at the footer, and page buttons on the header.
 
-compile:
+It uses filename for titles, artist name for artist (obviously), and album for playlists. You can use album as album too, what it does is just adding it to the searchable string and displaying on the footer.
 
-You need libalsa(-devel) + ncurses from your package manager.
+You can see or change keybinds at the top of crystal_manager.rs. They are in form of consts. Make sure to change consts and not match{} branch.
 
-You can compile it with "cargo build" (rust compiler)
+Song limit is theoretically usize::MAX - 1 but page indicator can get fucked. It does not expand when it becomes two digits or such. I'll add it though.
 
-Current keybindings: you can change all keybinds to something useless using the consts in crystal_manager.rs
+Current keybinds:
 
-U or KEY_UP -> go up OR volume up (special interaction mode)
+P O L M N U J F C V E G S R and arrow keys
 
-J or KEY_DOWN -> go down OR volume down (special interaction mode)
+P: Play the song at cursor location
 
-KEY_RIGHT -> +5 seconds into the song
+O: Toggle extra mode ( for volume control )
 
-KEY_LEFT -> -5 seconds
+L: Toggle loop
 
-f -> shuffle
+M/Right arrow: Seek +5 seconds
 
-p -> play the selected music
+N/Left arrow: Seek -5 seconds
 
-s -> pause
+U/Up arrow: Move cursor / Volume up in extra mode
 
-l -> loop mode
+J/Down arrow: Move cursor / Volume down in extra mode
 
-o -> special interaction mode
+F: Toggle shuffle
 
-b -> blacklist song (unreachable by both auto next and p button)
+C: Change artist name. You'll enter a string and press enter when you're done.
 
-r -> resume
+V: Change album/playlist. You'll enter a string and press enter when you're done.
 
-h -> search 
+E: Force next song. Next song algorithm guarantees that song will be the next track. This isn't cancellable.
 
-c -> change artist name (edit metadata)
+G: Force full redraw. Useful when you get alsa underrun warnings on your terminal.
 
-v -> change playlist name (edit metadata)
+S: Stop (not actually, it just pauses.)
 
-g -> go to top
+R: Resume
 
-TODO
 
-Progress bar seek / Volume functions with clickable UI
 
-Playlist logic should be handled with folders PLUS metadata
 
-Maybe support for .flac .alac but uhh who needs this shit?
-
-I'M AWARE
-
-next song selection algorithm doesn't take isloop into account, which is fine if you ask me.
