@@ -1,26 +1,18 @@
-use std::time::{Duration, Instant};
 use super::curses::Ownership;
-use crate::modules::presence::{RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild};
+use crate::modules::presence::{
+    RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild,
+};
 use crate::modules::songs::absolute_index;
 use crate::modules::tui_ir::{ColorIntegerSize, Execute};
 use crate::modules::utils::ReinitMode;
 use glob::glob;
 use home::home_dir;
 use pancurses::{COLOR_PAIR, Window};
+use std::time::{Duration, Instant};
 
-
-use super::utils::{
-    Indexer,
-    Timer,
-    State,
-    Volume,
-    RpcState,
-    SlidingText,
-    SearchQuery
-};
-use super::tui_ir::{UI};
 use super::songs::Songs;
-
+use super::tui_ir::UI;
+use super::utils::{Indexer, RpcState, SearchQuery, SlidingText, State, Timer, Volume};
 
 pub struct NcursesExec;
 
@@ -32,7 +24,9 @@ impl Execute<Window> for NcursesExec {
     fn blob(ptr: *const u8, len: usize, color: ColorIntegerSize, w: &mut Window) {
         w.attron(COLOR_PAIR(color));
         unsafe {
-            w.addstr(std::str::from_utf8_unchecked(std::slice::from_raw_parts(ptr, len)));
+            w.addstr(std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                ptr, len,
+            )));
         }
         w.attroff(COLOR_PAIR(color));
     }
@@ -42,7 +36,6 @@ impl Execute<Window> for NcursesExec {
         pancurses::doupdate();
     }
 }
-
 
 pub struct GeneralState {
     pub index: Indexer,
@@ -54,10 +47,10 @@ pub struct GeneralState {
     pub rpc: RpcState,
     pub sliding: SlidingText,
     pub searchquery: SearchQuery,
-    pub songs: Songs
+    pub songs: Songs,
 }
 
-impl GeneralState { 
+impl GeneralState {
     pub fn blacklist(&mut self) {
         self.songs.blacklist(absolute_index(
             self.index.index,
@@ -79,18 +72,13 @@ impl GeneralState {
                 comm.send_message(rpc_init_autobuild(
                     &self.songs,
                     self.timer.maxlen.as_secs_f32() as u64,
-                    instant
+                    instant,
                 ));
             }
         }
         self.rpc.reset();
-        
     }
 
-
-
-
-    
     pub fn new() -> Self {
         Self {
             index: Indexer { page: 1, index: 0 },
@@ -101,6 +89,7 @@ impl GeneralState {
                 desel: false,
                 mouse_support: true,
                 needs_update: true,
+                needs_dbus: true,
             },
             volume: Volume {
                 steps: 50,
@@ -130,17 +119,16 @@ fn home() -> String {
         .join("*.mp3")
         .to_string_lossy()
         .to_string()
-} 
+}
 fn globwrap() -> Vec<String> {
     glob(&home())
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|p| p.display().to_string())
-            .collect::<Vec<String>>()
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|p| p.display().to_string())
+        .collect::<Vec<String>>()
+}
 
-} 
-
-#[cfg(feature = "mouse")]
+#[allow(dead_code)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Action {
     Play(usize, usize),
@@ -149,11 +137,9 @@ pub enum Action {
     Rpc,
     PgDown,
     PgUp,
+    Stop,
+    Resume,
+    DbusNext,
+    DbusPrev,
     Nothing,
-}
-
-#[cfg(not(feature = "mouse"))]
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Action {
-    Nothing
 }

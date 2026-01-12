@@ -58,9 +58,9 @@ pub fn play_audio(
                     let file: File = File::open(value.clone())?;
                     let source: Decoder<BufReader<File>> = Decoder::new(BufReader::new(file))?;
                     sink.clear();
-                    thread::sleep(Duration::from_millis(15));
+                    thread::sleep(Duration::from_millis(20));
                     sink.append(source);
-                    thread::sleep(Duration::from_millis(15));
+                    thread::sleep(Duration::from_millis(20));
                     cached_duration = mp3_duration::from_path(Path::new(value.as_str()))?;
                     sink.play();
                     cached = value;

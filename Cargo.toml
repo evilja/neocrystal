@@ -4,7 +4,7 @@ version = "1.5.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["rpc"]
 
 rpc = ["discord-presence"]
 mouse = []
@@ -26,3 +26,5 @@ pancurses = { version = "0.17.0", features = ["win32", "wide"] }
 
 [target.'cfg(unix)'.dependencies]
 pancurses = { version = "0.17.0", features = ["wide"] }
+zbus = "4"
+zvariant = "4"

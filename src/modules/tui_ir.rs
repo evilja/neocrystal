@@ -70,6 +70,7 @@
 ///       byte 447 3
 ///       bytes: [E2, 94, 82]
 /// 
+extern crate unicode_width;
 use unicode_width::UnicodeWidthStr;
 
 

@@ -172,6 +172,7 @@ pub struct State {
     pub desel: bool,
     pub mouse_support: bool,
     pub needs_update: bool,
+    pub needs_dbus: bool,
 }
 pub struct RpcState {
     pub reinit: bool,

@@ -95,9 +95,8 @@ impl Songs {
             blacklist: Vec::new(),
             setnext: usize::MAX,
         }
-
     }
-    
+
     pub fn current_artist(&self) -> String {
         if self.stophandler {
             return "Nothing".to_string();
@@ -127,6 +126,18 @@ impl Songs {
                 }
             }
             None => "".to_string(),
+        }
+    }
+
+    pub fn _status(&self) -> u8 {
+        if self.stophandler {
+            // current index is initialized but setnext is 0 from stop() method
+            if self.setnext == usize::MAX && !self.current_index == usize::MAX {
+                return 1;
+            }
+            return 0;
+        } else {
+            return 2;
         }
     }
 
@@ -344,10 +355,23 @@ impl Songs {
             Ok(self.current_index)
         }
     }
+    pub fn prev(&mut self) -> Result<usize, ()> {
+        if self.stophandler {
+            Err(())
+        } else {
+            self.renew_current_status(self.current_index.saturating_sub(1));
+            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+            Ok(self.current_index)
+        }
+    }
 
+    pub fn resume(&mut self) {
+        self.stophandler = false;
+        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+    }
     pub fn stop(&mut self) {
         self.stophandler = true;
-        //self.setnext = usize::MAX;
+        self.setnext = usize::MAX;
     }
 
     pub fn shuffle(&mut self) {

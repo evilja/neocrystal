@@ -1,18 +1,21 @@
 extern crate glob;
 extern crate pancurses;
+use super::general::{Action, GeneralState};
 use crate::modules::audio::{AudioCommand, AudioReportAction};
+#[cfg(not(target_os = "windows"))]
+use crate::modules::dbus::spawn_mpris;
+#[cfg(not(target_os = "windows"))]
 use crate::modules::mouse::{self};
 use crate::modules::presence;
-use pancurses::{initscr, Input};
-use std::sync::mpsc::{Receiver, Sender};
+use pancurses::{Input, initscr};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self};
-use std::time::{Instant};
-use super::general::{GeneralState, Action};
+use std::time::Instant;
 
 use super::{
     curses::*,
-    presence::{rpc_handler, RpcCommand},
-    songs::{absolute_index},
+    presence::{RpcCommand, rpc_handler},
+    songs::absolute_index,
 };
 
 pub const UP: char = 'u';
@@ -43,41 +46,52 @@ pub const MOUSE_SUPPORT: char = 't';
 ///                 check if fcalc is smaller than 100 milliseconds && info belongs to the current song
 ///                 true -> return f13 meaning song ended. 100 milliseconds because get_pos is inconsistent
 ///                 false -> return f14 meaning a duration is sent, triggering rpc things and such.
-///      -> fail -> do nothing
+///      -> fail -> check d-bus commands
 macro_rules! get_input_or_report {
-    ($window:expr, $comm_rx:expr, $songs:expr, $loctimer:expr, $timeout_ms:expr) => {{
-        $window.getch().or_else(|| {
+    ($window:expr, $comm_rx:expr, $general:expr, $loctimer:expr, $timeout_ms:expr) => {{
+        // 1) Try real input first
+        let mut key = $window.getch().or_else(|| {
             match $comm_rx.recv_timeout(std::time::Duration::from_millis($timeout_ms)) {
                 Ok(msg) => match msg {
                     crate::AudioReportAction::Duration(name, time) => {
-                        if name == $songs.current_song_path() {
+                        if name == $general.songs.current_song_path() {
                             $loctimer.fcalc = time;
                             if $loctimer.fcalc <= std::time::Duration::from_millis(100) {
-                                Some(Input::KeyF13)
+                                Some(pancurses::Input::KeyF13)
                             } else {
-                                Some(Input::KeyF14)
+                                Some(pancurses::Input::KeyF14)
                             }
                         } else {
-                            Some(Input::KeyF15)
+                            Some(pancurses::Input::KeyF15)
                         }
                     }
-                    _ => Some(Input::KeyF15),
+                    _ => Some(pancurses::Input::KeyF15),
                 },
                 Err(_) => None,
             }
-        })
+        });
+
+        // 2) If no real input, but D-Bus action exists, synthesize equivalent key
+        if key.is_none() && $general.action != Action::Nothing {
+            if let Some(nk) = crate::modules::mouse::action_to_key($general.action, &mut $general) {
+                key = Some(nk);
+            }
+        }
+
+        key
     }};
 }
 
-
-
 pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAction>) -> bool {
     let mut window = initscr();
-
+    let (dbus_action_tx, dbus_action_rx): (Sender<Action>, Receiver<Action>) = mpsc::channel();
     let mut general: GeneralState = GeneralState::new();
 
+    #[cfg(not(target_os = "windows"))]
+    let mpris = spawn_mpris(dbus_action_tx.clone());
+
     let mut page = PageData::new();
-    
+
     let rpc_comm = {
         let (rpc_comm, receiver) = presence::RpcCommunication::new();
         if let Some(rx) = receiver {
@@ -88,7 +102,6 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
         rpc_comm
     };
 
-
     init_curses(&mut window);
     autoalloc(&mut general);
     draw_all(&mut general, &mut page);
@@ -97,11 +110,35 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
             update(&mut general, &mut window);
             general.state.needs_update = false;
         }
-        if general.action != Action::Nothing {general.action = Action::Nothing;}
+        if general.state.needs_dbus {
+            #[cfg(not(target_os = "windows"))]
+            {
+                let mut s = mpris.state.lock().unwrap();
+
+                if general.songs.current_index == usize::MAX {
+                    s.playback_status = 2;
+                    s.title = "Nothing".into();
+                    s.artist = vec!["Nothing".into()];
+                    s.length_us = 0;
+                } else if general.songs.stophandler {
+                    s.playback_status = 1;
+                } else {
+                    s.playback_status = 0;
+                    s.title = general.songs.current_name();
+                    s.artist = vec![general.songs.current_artist()];
+                    s.length_us = general.songs.get_duration().as_micros() as i64;
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            mpris.emit();
+            general.state.needs_dbus = false;
+        }
+        while let Ok(action) = dbus_action_rx.try_recv() {
+            general.action = action;
+        }
         // key_opt catches either duration communications from audio thread or user input
         // if nothing is there to catch, it will just skip after 10 milliseconds           there
-
-        let key_opt = get_input_or_report!(window, comm_rx, general.songs, general.timer, 10);
+        let key_opt = get_input_or_report!(window, comm_rx, general, general.timer, 10);
 
         if let Some(mut key) = key_opt {
             general.state.needs_update = true;
@@ -117,13 +154,19 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                                 page.draw_indicators(&mut general);
                             }
                             2 => {
-                                general.songs.set_artist(general.songs.match_c(), &general.searchquery.query);
+                                general.songs.set_artist(
+                                    general.songs.match_c(),
+                                    &general.searchquery.query,
+                                );
                                 draw_artist(&mut general);
+                                general.state.needs_dbus = true;
                             }
                             3 => {
-                                general.songs.set_playlist(general.songs.match_c(), &general.searchquery.query);
+                                general.songs.set_playlist(
+                                    general.songs.match_c(),
+                                    &general.searchquery.query,
+                                );
                                 draw_playlist(&mut general);
-
                             }
                             _ => {}
                         }
@@ -145,17 +188,70 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 }
             }
             if key == Input::KeyMouse {
-                if !(general.state.mouse_support) {continue;}
+                if !(general.state.mouse_support) {
+                    continue;
+                }
                 if let Ok(mevent) = pancurses::getmouse() {
                     if let Some(action) = mouse::handle_mouse(mevent, &general) {
                         general.action = action;
-                        if let Some(nk) = mouse::action_to_key(action, &mut general) {
-                            key = nk;
-                        }
                     }
                 }
             }
+            if general.action != Action::Nothing {
+                if let Some(nk) = mouse::action_to_key(general.action, &mut general) {
+                    key = nk;
+                }
+            }
             match key {
+                Input::KeyNext => {
+                    // song ended but ignore loop. this is used from D-Bus or keyboard but mainly dbus
+                    if general.songs.stophandler {
+                        continue;
+                    } else {
+                        match general.songs.set_by_next() {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        }
+                    }
+                    tx.send(AudioCommand::Play(general.songs.current_song_path()))
+                        .unwrap();
+                    general.timer.maxlen = general.songs.get_duration();
+                    general.timer.fcalc = general.timer.maxlen;
+                    general.rpc.init();
+                    general.sliding.reset_to(general.songs.current_name());
+                    draw_artist(&mut general);
+                    draw_playlist(&mut general);
+                    draw_sliding(&mut general);
+                    draw_time_max(&mut general);
+                    draw_time_cur(&mut general);
+                    page.draw_indicators(&mut general);
+                    draw_rpc_indc(&mut general);
+                    general.state.needs_dbus = true;
+                }
+                Input::KeyPrevious => {
+                    if general.songs.stophandler {
+                        continue;
+                    } else {
+                        match general.songs.prev() {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        }
+                    }
+                    tx.send(AudioCommand::Play(general.songs.current_song_path()))
+                        .unwrap();
+                    general.timer.maxlen = general.songs.get_duration();
+                    general.timer.fcalc = general.timer.maxlen;
+                    general.rpc.init();
+                    general.sliding.reset_to(general.songs.current_name());
+                    draw_artist(&mut general);
+                    draw_playlist(&mut general);
+                    draw_sliding(&mut general);
+                    draw_time_max(&mut general);
+                    draw_time_cur(&mut general);
+                    page.draw_indicators(&mut general);
+                    draw_rpc_indc(&mut general);
+                    general.state.needs_dbus = true;
+                }
                 Input::KeyF13 => {
                     // song ended
                     if general.songs.stophandler {
@@ -180,6 +276,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_time_cur(&mut general);
                     page.draw_indicators(&mut general);
                     draw_rpc_indc(&mut general);
+                    general.state.needs_dbus = true;
                 }
                 Input::KeyF14 => {
                     //duration sent
@@ -199,21 +296,11 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 }
 
                 Input::KeyDown | Input::Character(DOWN) => {
-                    move_selection(
-                        Direction::Down,
-                        &mut general,
-                        &tx,
-                        &mut page
-                    );
+                    move_selection(Direction::Down, &mut general, &tx, &mut page);
                 }
 
                 Input::KeyUp | Input::Character(UP) => {
-                    move_selection(
-                        Direction::Up,
-                        &mut general,
-                        &tx,
-                        &mut page
-                    );
+                    move_selection(Direction::Up, &mut general, &tx, &mut page);
                 }
 
                 Input::Character(PLAY) => {
@@ -236,6 +323,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         }
                         _ => (),
                     }
+                    general.state.needs_dbus = true;
                 }
 
                 Input::Character(SPECIAL) => {
@@ -253,6 +341,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     tx.send(AudioCommand::Pause).unwrap();
                     rpc_comm.send_message(RpcCommand::Clear);
                     page.draw_indicators(&mut general);
+                    general.state.needs_dbus = true;
                 }
 
                 Input::Character(BLACKLIST) => {
@@ -264,11 +353,12 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     if general.songs.current_index == usize::MAX {
                         continue;
                     }
-                    general.songs.stophandler = false;
+                    general.songs.resume();
                     tx.send(AudioCommand::Resume).unwrap();
                     general.rpc.pretend();
                     page.draw_indicators(&mut general);
                     draw_rpc_indc(&mut general);
+                    general.state.needs_dbus = true;
                 }
                 Input::KeyRight | Input::Character(RIGHT) => {
                     tx.send(AudioCommand::SeekForward).unwrap();
@@ -290,6 +380,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     draw_search(&mut general);
                 }
                 Input::Character(FULL) => {
+                    window.clear();
                     draw_all(&mut general, &mut page);
                 }
                 Input::Character(CHANGE) => {
@@ -331,6 +422,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                 _ => (),
             }
         }
+        general.action = Action::Nothing;
     }
     match rpc_comm.send_message(RpcCommand::Stop) {
         _ => (),
@@ -339,11 +431,12 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
     true
 }
 
-pub fn play_current_song(
-    general: &mut GeneralState,
-    tx: &Sender<AudioCommand>,
-) -> bool {
-    if general.songs.set_by_pindex(general.index.index, general.index.page) != Err(0) {
+pub fn play_current_song(general: &mut GeneralState, tx: &Sender<AudioCommand>) -> bool {
+    if general
+        .songs
+        .set_by_pindex(general.index.index, general.index.page)
+        != Err(0)
+    {
         if tx
             .send(AudioCommand::Play(general.songs.current_song_path()))
             .is_err()
@@ -395,7 +488,6 @@ pub fn change_page(dir: Direction, general: &mut GeneralState, page: &mut PageDa
     }
 }
 
-
 pub enum Direction {
     Up,
     Down,
@@ -430,8 +522,11 @@ pub fn move_selection(
                 }
             }
             Direction::Down => {
-                let absolute = absolute_index(general.index.index, general.index.page, general.songs.typical_page_size)
-                    < general.songs.filtered_songs.len() - 1;
+                let absolute = absolute_index(
+                    general.index.index,
+                    general.index.page,
+                    general.songs.typical_page_size,
+                ) < general.songs.filtered_songs.len() - 1;
                 if general.index.index + 1 < general.songs.typical_page_size && absolute {
                     general.index.index += 1;
                     page.draw_unchanged_moved_page(general);
