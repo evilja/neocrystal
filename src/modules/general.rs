@@ -93,7 +93,7 @@ impl GeneralState {
             },
             volume: Volume {
                 steps: 50,
-                step_div: 2,
+                step_div: 1,
             },
             ui: UI::new(50, 20),
             action: Action::Nothing,
