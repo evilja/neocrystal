@@ -1,3 +1,5 @@
+## This repo will be discontinued when evilja/neocrystal-headless and evilja/neocrystal-client replaces it.
+
 This app is written in Rust and is opiniated.
 
 It supports mp3 only (you can change that easily i think, just make the constructor function of Songs see .flac files, though i'm not sure if mp3-duration library would work.)
