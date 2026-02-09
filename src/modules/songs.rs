@@ -1,11 +1,11 @@
-use crate::modules::utils::{addto_playlist, playlist_data};
-use rand::prelude::*;
+use crate::modules::utils::{addto_album, album_data};
+use rand::seq::SliceRandom;
 
 use super::utils::{artist_data, change_artist};
-use mp3_duration;
 use std::path::Path;
 use std::thread::spawn;
 use std::time::Duration;
+use super::audio::audio_duration;
 
 #[derive(Clone)]
 pub struct Song {
@@ -43,7 +43,7 @@ impl Songs {
         for (i, path) in paths.iter().enumerate() {
             let path_clone = path.clone();
             let handle = spawn(move || {
-                mp3_duration::from_path(Path::new(&path_clone)).unwrap_or(Duration::from_secs(0))
+                audio_duration(&path_clone)    
             });
             handles.push((i, handle));
         }
@@ -56,7 +56,7 @@ impl Songs {
 
         for (i, path) in paths.iter().enumerate() {
             let artist = artist_data(path);
-            let playlist = playlist_data(path);
+            let playlist = album_data(path);
             let name = Path::new(&path)
                 .file_stem()
                 .unwrap_or_default()
@@ -95,6 +95,30 @@ impl Songs {
             blacklist: Vec::new(),
             setnext: usize::MAX,
         }
+    }
+
+    pub fn get_ordered(&self) -> Vec<usize> {
+        let mut nvc = self.filtered_songs.clone();
+        nvc.sort();
+        nvc
+    }
+
+    pub fn get_unordered(&self) -> &Vec<usize> {
+        &self.filtered_songs
+    }
+
+    fn urandom(&mut self) {
+        if self.shuffle {
+            self.filtered_songs.shuffle(&mut rand::rng());
+        } else {
+            self.filtered_songs.sort();
+        }
+    }
+
+    pub fn shuffle(&mut self) {
+        self.shuffle = !self.shuffle;
+        self.urandom();
+        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
     }
 
     pub fn current_artist(&self) -> String {
@@ -164,14 +188,14 @@ impl Songs {
     }
 
     pub fn get_filtered_index(&self, original_index: usize) -> Result<usize, ()> {
-        self.filtered_songs
+        self.get_ordered()
             .iter()
             .position(|&i| i == original_index)
             .ok_or(())
     }
 
     pub fn match_c(&self) -> usize {
-        self.filtered_songs
+        self.get_ordered()
             .iter()
             .position(|&i| i == self.current_index)
             .unwrap_or(usize::MAX)
@@ -181,7 +205,7 @@ impl Songs {
         if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
             return;
         }
-        let idx = self.filtered_songs[index_in_filtered];
+        let idx = self.get_ordered()[index_in_filtered];
         if change_artist(&self.all_songs[idx].path, artist).is_ok() {
             self.all_songs[idx].artist = artist.clone();
             self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
@@ -193,8 +217,8 @@ impl Songs {
         if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
             return;
         }
-        let idx = self.filtered_songs[index_in_filtered];
-        if addto_playlist(&self.all_songs[idx].path, playlist).is_ok() {
+        let idx = self.get_ordered()[index_in_filtered];
+        if addto_album(&self.all_songs[idx].path, playlist).is_ok() {
             self.all_songs[idx].playlist = playlist.clone();
             self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
                 + &self.all_songs[idx].artist.to_lowercase()
@@ -206,18 +230,21 @@ impl Songs {
             self.filtered_songs = (0..self.all_songs.len()).collect();
             self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
             return;
+        } else {
+
+            let pattern = pattern.to_lowercase();
+            self.filtered_songs = self
+                .all_songs
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.searchable.contains(&pattern))
+                .map(|(i, _)| i)
+                .collect();
+
+            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
         }
+        self.urandom();
 
-        let pattern = pattern.to_lowercase();
-        self.filtered_songs = self
-            .all_songs
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.searchable.contains(&pattern))
-            .map(|(i, _)| i)
-            .collect();
-
-        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
     }
 
     pub fn blacklist(&mut self, index_in_filtered: usize) {
@@ -225,7 +252,7 @@ impl Songs {
             return;
         }
 
-        let original_index = self.filtered_songs[index_in_filtered];
+        let original_index = self.get_ordered()[index_in_filtered];
 
         if original_index == self.current_index {
             return;
@@ -269,7 +296,7 @@ impl Songs {
             return Err(1);
         }
 
-        let original_index = self.filtered_songs[absolute];
+        let original_index = self.get_ordered()[absolute];
         if self.blacklist.contains(&original_index) {
             return Err(0);
         }
@@ -297,44 +324,28 @@ impl Songs {
             return Ok(self.setnext);
         }
         if self.filtered_songs.len() == 1 {
-            let original_index = self.filtered_songs[0];
+            let original_index = self.get_unordered()[0];
             if self.blacklist.contains(&original_index) {
                 return Err(());
             } else {
                 return Ok(original_index);
             }
         }
-
-        if self.shuffle {
-            let mut rng = rand::rng();
-            let candidate_list = self
-                .filtered_songs
-                .iter()
-                .filter(|&&i| !self.blacklist.contains(&i) && i != self.current_index)
-                .copied()
-                .collect::<Vec<_>>();
-
-            if candidate_list.is_empty() {
-                return Err(());
-            }
-
-            let idx = rng.random_range(0..candidate_list.len());
-            return Ok(candidate_list[idx]);
-        }
-
         // sequential
         if let Ok(start) = self.get_filtered_index(self.current_index) {
-            for &i in &self.filtered_songs[start + 1..] {
+            for &i in &self.get_unordered()[start + 1..] {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }
             }
-            for &i in self.filtered_songs.iter().take(start) {
+            self.urandom();
+            for &i in self.get_unordered().iter().take(start) {
                 if !self.blacklist.contains(&i) {
                     return Ok(i);
                 }
             }
         } else {
+            self.urandom();
             // this shit should NEVER run but is there just in case
             for &i in &self.filtered_songs {
                 if !self.blacklist.contains(&i) && i != self.current_index {
@@ -372,10 +383,5 @@ impl Songs {
     pub fn stop(&mut self) {
         self.stophandler = true;
         self.setnext = usize::MAX;
-    }
-
-    pub fn shuffle(&mut self) {
-        self.shuffle = !self.shuffle;
-        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
     }
 }

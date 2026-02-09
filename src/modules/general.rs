@@ -116,7 +116,7 @@ fn home() -> String {
     home_dir()
         .expect("No home directory found")
         .join("Music")
-        .join("*.mp3")
+        .join("*.*")
         .to_string_lossy()
         .to_string()
 }

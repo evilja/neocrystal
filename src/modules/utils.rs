@@ -1,6 +1,9 @@
-use id3::TagLike;
+use audiotags::{Album, Tag};
+
 use unicode_width::UnicodeWidthStr;
 use unicode_segmentation::UnicodeSegmentation;
+use std::time::{Duration, Instant};
+
 pub struct Volume {
     pub steps: u8,
     pub step_div: u8,
@@ -26,7 +29,7 @@ impl Volume {
 }
 
 pub fn artist_data(filepath: &str) -> String {
-    let tag = id3::Tag::read_from_path(filepath);
+    let tag =  Tag::new().read_from_path(filepath);
     match tag {
         Ok(t) => {
             let artist = t.artists().unwrap_or(vec!["Unknown"]).join(", ");
@@ -35,34 +38,35 @@ pub fn artist_data(filepath: &str) -> String {
         Err(_) => "Unknown".to_string(),
     }
 }
-pub fn playlist_data(filepath: &str) -> String {
-    let tag = id3::Tag::read_from_path(filepath);
+pub fn album_data(filepath: &str) -> String {
+    let tag = Tag::new().read_from_path(filepath);
     match tag {
         Ok(t) => {
-            let artist = t.album().unwrap_or("");
-            artist.to_string()
+            let artist = t.album_title();
+            match artist {
+                Some(a) => a.to_string(),
+                None => "".to_string(),
+            }
         }
         Err(_) => "".to_string(),
     }
 }
-pub fn addto_playlist(filepath: &str, new_playlist: &str) -> Result<(), String> {
+pub fn addto_album(filepath: &str, new_playlist: &str) -> Result<(), String> {
     let mut tag =
-        id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
-    tag.set_album(new_playlist);
-    tag.write_to_path(filepath, id3::Version::Id3v24)
+        Tag::new().read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    tag.set_album(Album::with_title(new_playlist));
+    tag.write_to_path(filepath)
         .map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
     Ok(())
 }
 pub fn change_artist(filepath: &str, new_artist: &str) -> Result<(), String> {
     let mut tag =
-        id3::Tag::read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+        Tag::new().read_from_path(filepath).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     tag.set_artist(new_artist);
-    tag.write_to_path(filepath, id3::Version::Id3v24)
+    tag.write_to_path(filepath)
         .map_err(|e| format!("Failed to write ID3 tag: {}", e))?;
     Ok(())
 }
-
-use std::time::{Duration, Instant};
 
 pub struct SlidingText {
     graphemes: Vec<String>,

@@ -56,14 +56,13 @@ macro_rules! get_input_or_report {
                     crate::AudioReportAction::Duration(name, time) => {
                         if name == $general.songs.current_song_path() {
                             $loctimer.fcalc = time;
-                            if $loctimer.fcalc <= std::time::Duration::from_millis(100) {
-                                Some(pancurses::Input::KeyF13)
-                            } else {
-                                Some(pancurses::Input::KeyF14)
-                            }
+                            Some(pancurses::Input::KeyF14)
                         } else {
                             Some(pancurses::Input::KeyF15)
                         }
+                    }
+                    crate::AudioReportAction::EOF => {
+                        Some(pancurses::Input::KeyF13)
                     }
                     _ => Some(pancurses::Input::KeyF15),
                 },
@@ -80,6 +79,43 @@ macro_rules! get_input_or_report {
 
         key
     }};
+}
+
+#[derive(PartialEq, Debug)]
+#[repr(u16)]
+pub enum Magic {
+    Play(usize) = 0,
+    VolUp = 1,
+    VolDown = 2,
+    Shuffle = 3,
+    Blacklist(usize) = 4,
+    Stop = 5,
+    Resume = 6,
+    Repeat = 7,
+    SeekF = 8,
+    SeekB = 9,
+    SetNext(usize) = 10,
+
+    Search(String) = 101,
+    MetadataArtist(String) = 102,
+    MetadataAlbum(String) = 103,
+
+    PrevForce = 201,
+    NextForce = 202,
+    NextGraceful = 203,
+    Duration = 204,
+    PlayDbus = 205,
+
+    Up = 301,
+    Down = 302,
+
+    Release = 999,
+    NULL = 1000,
+}
+pub enum Event {
+    Magic(Magic),
+    Action(Action),
+    Audio(AudioReportAction),
 }
 
 pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAction>) -> bool {

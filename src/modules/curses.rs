@@ -24,6 +24,7 @@ pub fn to_mm_ss(duration: Duration) -> String {
 #[derive(Copy, Clone, PartialEq)]
 pub enum Ownership {
     Songs,
+    PlaylistPage,
     SongInd,
     Playlist,
     Sliding,
@@ -39,6 +40,13 @@ pub enum Ownership {
     Search,
     Page,
     Progress,
+}
+
+pub fn switch_alloc(general: &mut GeneralState) {
+    general.ui.alloc(&Ownership::PlaylistPage, (2, 46), (1, 14));
+}
+pub fn realloc(general: &mut GeneralState) {
+    general.ui.alloc(&Ownership::Songs, (2, 46), (1, 14));
 }
 
 pub fn autoalloc(general: &mut GeneralState) {
@@ -136,7 +144,7 @@ impl PageData {
         }
     }
     fn get_name<'life>(&self, general: &'life mut GeneralState, idx: usize) -> String {
-        general.songs.all_songs[general.songs.filtered_songs
+        general.songs.all_songs[general.songs.get_ordered()
             [(general.index.page.max(1) - 1) * general.songs.typical_page_size.max(1) + idx]]
             .name
             .clone()
@@ -152,7 +160,7 @@ impl PageData {
                 &Ownership::Songs,
                 0,
                 general.index.index,
-                &general.songs.all_songs[general.songs.filtered_songs[(general.index.page.max(1)
+                &general.songs.all_songs[general.songs.get_ordered()[(general.index.page.max(1)
                     - 1)
                     * general.songs.typical_page_size.max(1)
                     + general.index.index]]
@@ -172,8 +180,9 @@ impl PageData {
 
         let mut row = 0;
 
+        let g = general.songs.get_ordered();
         for abs in start..end {
-            let original = general.songs.filtered_songs[abs];
+            let original = g[abs];
             let song = &general.songs.all_songs[original];
 
             general.ui.write(
@@ -215,17 +224,16 @@ impl PageData {
         let total = general.songs.filtered_songs.len();
         let psize = general.songs.typical_page_size.max(1);
 
-        let page = general.index.page.max(1);
-        let start = (page - 1) * psize;
-        let end = (start + psize).min(total);
+        let start = (general.index.page.max(1) - 1) * psize;
 
         let current = general.songs.match_c();
         let next = general.songs.get_next();
 
         let mut row = 0;
 
-        for abs in start..end {
-            let original = general.songs.filtered_songs[abs];
+        let g = general.songs.get_ordered();
+        for abs in start..(start + psize).min(total) {
+            let original = g[abs];
 
             if abs == current {
                 self.current = Some(row);
