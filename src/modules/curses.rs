@@ -252,6 +252,7 @@ impl PageData {
 }
 
 pub fn draw_playlist(general: &mut GeneralState) {
+    general.ui.empty_instruction(&Ownership::Playlist, 0);
     general.ui.write(
         &Ownership::Playlist,
         0,

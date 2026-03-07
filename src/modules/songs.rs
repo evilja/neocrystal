@@ -43,7 +43,7 @@ impl Songs {
         for (i, path) in paths.iter().enumerate() {
             let path_clone = path.clone();
             let handle = spawn(move || {
-                audio_duration(&path_clone)    
+                audio_duration(&path_clone)
             });
             handles.push((i, handle));
         }
@@ -134,7 +134,7 @@ impl Songs {
 
     pub fn current_playlist(&self) -> String {
         if self.stophandler {
-            return "".to_string();
+            return " ".to_string();
         }
 
         match self
@@ -144,12 +144,12 @@ impl Songs {
         {
             Some(something) => {
                 if something == "" {
-                    "".to_string()
+                    " ".to_string()
                 } else {
                     something
                 }
             }
-            None => "".to_string(),
+            None => " ".to_string(),
         }
     }
 
