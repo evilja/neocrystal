@@ -3,6 +3,7 @@ extern crate pancurses;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 mod modules;
+mod libkagami;
 use crate::modules::audio::AudioReportAction;
 use crate::modules::{
     audio::{play_audio, AudioCommand},

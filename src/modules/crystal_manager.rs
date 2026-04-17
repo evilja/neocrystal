@@ -1,6 +1,7 @@
 extern crate glob;
 extern crate pancurses;
 use super::general::{Action, GeneralState};
+use super::subtitle::PreciseSubtitleImport;
 use crate::modules::audio::{AudioCommand, AudioReportAction};
 #[cfg(not(target_os = "windows"))]
 use crate::modules::dbus::spawn_mpris;
@@ -79,6 +80,13 @@ macro_rules! get_input_or_report {
 
         key
     }};
+}
+
+fn replace_extension(path: &str, new_ext: &str) -> String {
+    let p = std::path::Path::new(path);
+    p.with_extension(new_ext)
+        .to_string_lossy()
+        .to_string()
 }
 
 #[derive(PartialEq, Debug)]
@@ -253,6 +261,15 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         .unwrap();
                     general.timer.maxlen = general.songs.get_duration();
                     general.timer.fcalc = general.timer.maxlen;
+                    let ass_path = replace_extension(&general.songs.current_song_path(), "ass");
+                    if std::path::Path::new(&ass_path).exists() {
+                        let mut sub = PreciseSubtitleImport::new();
+                        sub.asyncgate(&ass_path);
+                        general.subtitle = Some(sub);
+                    } else {
+                        general.subtitle = None;
+                        draw_subtitle(&mut general, None);
+                    }
                     general.rpc.init();
                     general.sliding.reset_to(general.songs.current_name());
                     draw_artist(&mut general);
@@ -277,6 +294,15 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         .unwrap();
                     general.timer.maxlen = general.songs.get_duration();
                     general.timer.fcalc = general.timer.maxlen;
+                    let ass_path = replace_extension(&general.songs.current_song_path(), "ass");
+                    if std::path::Path::new(&ass_path).exists() {
+                        let mut sub = PreciseSubtitleImport::new();
+                        sub.asyncgate(&ass_path);
+                        general.subtitle = Some(sub);
+                    } else {
+                        general.subtitle = None;
+                        draw_subtitle(&mut general, None);
+                    }
                     general.rpc.init();
                     general.sliding.reset_to(general.songs.current_name());
                     draw_artist(&mut general);
@@ -303,6 +329,15 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                         .unwrap();
                     general.timer.maxlen = general.songs.get_duration();
                     general.timer.fcalc = general.timer.maxlen;
+                    let ass_path = replace_extension(&general.songs.current_song_path(), "ass");
+                    if std::path::Path::new(&ass_path).exists() {
+                        let mut sub = PreciseSubtitleImport::new();
+                        sub.asyncgate(&ass_path);
+                        general.subtitle = Some(sub);
+                    } else {
+                        general.subtitle = None;
+                        draw_subtitle(&mut general, None);
+                    }
                     general.rpc.init();
                     general.sliding.reset_to(general.songs.current_name());
                     draw_artist(&mut general);
@@ -325,6 +360,13 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     if general.sliding.is_changing() {
                         draw_sliding(&mut general);
                     }
+                    if general.subtitle.is_some() {
+                        let elapsed = general.timer.maxlen
+                            .checked_sub(general.timer.fcalc)
+                            .unwrap_or_default();
+                        let text = general.subtitle.as_ref().unwrap().get_from_time(elapsed);
+                        draw_subtitle(&mut general, text.as_deref());
+                    }
                 }
                 Input::Character(QUIT) => {
                     tx.send(AudioCommand::Stop).unwrap();
@@ -343,6 +385,15 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     if !play_current_song(&mut general, &tx) {
                         continue;
                     };
+                    let ass_path = replace_extension(&general.songs.current_song_path(), "ass");
+                    if std::path::Path::new(&ass_path).exists() {
+                        let mut sub = PreciseSubtitleImport::new();
+                        sub.asyncgate(&ass_path);
+                        general.subtitle = Some(sub);
+                    } else {
+                        general.subtitle = None;
+                        draw_subtitle(&mut general, None);
+                    }
                     general.rpc.init();
                     draw_artist(&mut general);
                     draw_playlist(&mut general);
@@ -376,6 +427,8 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     general.songs.stop();
                     tx.send(AudioCommand::Pause).unwrap();
                     rpc_comm.send_message(RpcCommand::Clear);
+                    general.subtitle = None;
+                    draw_subtitle(&mut general, None);
                     page.draw_indicators(&mut general);
                     general.state.needs_dbus = true;
                 }

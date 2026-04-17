@@ -7,7 +7,6 @@ pub mod utils;
 pub mod general;
 pub mod tui_ir;
 pub mod mouse;
-
-
 #[cfg(not(target_os = "windows"))]
 pub mod dbus;
+pub mod subtitle;

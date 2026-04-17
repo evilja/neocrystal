@@ -22,6 +22,8 @@ unicode-segmentation = "1.12.0"
 symphonia = "0.5.5"
 cpal = "0.17.1"
 ringbuf = "0.4.8"
+tokio = { version = "1", features = ["io-util", "rt-multi-thread", "macros", "fs", "time", "process"] }
+tokio-util = { version = "0.7.18", features = ["io"] }
 
 
 [target.'cfg(windows)'.dependencies]

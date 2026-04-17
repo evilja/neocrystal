@@ -2,6 +2,7 @@ use super::curses::Ownership;
 use crate::modules::presence::{
     RpcCommunication, rpc_init_autobuild, rpc_pretend_autobuild, rpc_rnw_autobuild,
 };
+use crate::modules::subtitle::PreciseSubtitleImport;
 use crate::modules::songs::absolute_index;
 use crate::modules::tui_ir::{ColorIntegerSize, Execute};
 use crate::modules::utils::ReinitMode;
@@ -43,6 +44,7 @@ pub struct GeneralState {
     pub state: State,
     pub volume: Volume,
     pub ui: UI<Ownership>,
+    pub subtitle: Option<PreciseSubtitleImport>,
     pub action: Action,
     pub rpc: RpcState,
     pub sliding: SlidingText,
@@ -96,6 +98,7 @@ impl GeneralState {
                 step_div: 1,
             },
             ui: UI::new(50, 20),
+            subtitle: None,
             action: Action::Nothing,
             rpc: RpcState {
                 reinit: false,
@@ -116,16 +119,20 @@ fn home() -> String {
     home_dir()
         .expect("No home directory found")
         .join("Music")
-        .join("*.*")
         .to_string_lossy()
         .to_string()
 }
 fn globwrap() -> Vec<String> {
-    glob(&home())
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|p| p.display().to_string())
-        .collect::<Vec<String>>()
+    let base = home();
+    ["*.mp3", "*.flac"]
+        .iter()
+        .flat_map(|ext| {
+            glob(&format!("{}/{}", base, ext))
+                .unwrap()
+                .filter_map(Result::ok)
+                .map(|p| p.display().to_string())
+        })
+        .collect()
 }
 
 #[allow(dead_code)]

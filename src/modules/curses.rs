@@ -24,6 +24,7 @@ pub fn to_mm_ss(duration: Duration) -> String {
 #[derive(Copy, Clone, PartialEq)]
 pub enum Ownership {
     Songs,
+    Subtitle,
     PlaylistPage,
     SongInd,
     Playlist,
@@ -49,6 +50,14 @@ pub fn realloc(general: &mut GeneralState) {
     general.ui.alloc(&Ownership::Songs, (2, 46), (1, 14));
 }
 
+pub fn draw_subtitle(general: &mut GeneralState, text: Option<&str>) {
+    let content = text.unwrap_or("");
+    let width = general.ui.get_range(&Ownership::Subtitle).unwrap_or(46);
+    let text_width = content.width();
+    let x = (width / 2).saturating_sub(text_width / 2);
+    general.ui.write(&Ownership::Subtitle, x, 0, content, 9);
+}
+
 pub fn autoalloc(general: &mut GeneralState) {
     /* ---------------- BEGIN ALLOCATION ---------------- */
     general.ui.alloc(&Ownership::Songs, (2, 46), (1, 14));
@@ -64,6 +73,9 @@ pub fn autoalloc(general: &mut GeneralState) {
     general.ui.alloc(&Ownership::RpcVol, (41, 7), (17, 1));
     general.ui.alloc(&Ownership::RpcInd, (41, 3), (18, 1));
     general.ui.alloc(&Ownership::VolInd, (45, 3), (18, 1));
+    general
+        .ui
+        .c_alloc(&Ownership::Subtitle, (2, 46), (15, 1), Some("─".to_string()));
     general
         .ui
         .c_alloc(&Ownership::Search, (2, 32), (0, 1), Some("─".to_string()));
