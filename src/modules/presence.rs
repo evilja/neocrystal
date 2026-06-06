@@ -184,7 +184,7 @@ pub fn rpc_handler(comm_recv: Receiver<RpcCommand>) {
                             .state(&title)
                             .details(&detai)
                             .assets(|ass| {
-                                ass .large_image("001")
+                                ass .large_image("kikuohana")
                                     .small_image("github")
                                     .small_text("github.com/evilja/neocrystal")
                             })

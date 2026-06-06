@@ -368,11 +368,28 @@ impl Songs {
     }
     pub fn prev(&mut self) -> Result<usize, ()> {
         if self.stophandler {
-            Err(())
-        } else {
-            self.renew_current_status(self.current_index.saturating_sub(1));
+            return Err(());
+        }
+        let start = match self.get_filtered_index(self.current_index) {
+            Ok(s) => s,
+            Err(()) => return Err(()),
+        };
+        let unordered = self.get_unordered();
+        let candidate = (0..start)
+            .rev()
+            .map(|i| unordered[i])
+            .chain(
+                (start + 1..unordered.len())
+                    .rev()
+                    .map(|i| unordered[i]),
+            )
+            .find(|&i| !self.blacklist.contains(&i));
+        if let Some(i) = candidate {
+            self.renew_current_status(i);
             self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
             Ok(self.current_index)
+        } else {
+            Err(())
         }
     }
 
