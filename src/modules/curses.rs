@@ -1,10 +1,18 @@
-use pancurses::{Window, mousemask};
+use pancurses::{mousemask, Window};
 
 use crate::modules::{general::NcursesExec, utils::ReinitMode};
 use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 
 use super::general::GeneralState;
+
+const WINDOW_WIDTH: i32 = 50;
+const WINDOW_HEIGHT: i32 = 20;
+const TITLE_COLOR: u32 = 9;
+const ACTIVE_COLOR: u32 = 1;
+const INACTIVE_COLOR: u32 = 2;
+const HIGHLIGHT_COLOR: u32 = 3;
+const PENDING_COLOR: u32 = 4;
 
 #[inline]
 pub fn calc(maxlen: Duration, curr: Duration) -> usize {
@@ -25,7 +33,6 @@ pub fn to_mm_ss(duration: Duration) -> String {
 pub enum Ownership {
     Songs,
     Subtitle,
-    PlaylistPage,
     SongInd,
     Playlist,
     Sliding,
@@ -43,23 +50,47 @@ pub enum Ownership {
     Progress,
 }
 
-pub fn switch_alloc(general: &mut GeneralState) {
-    general.ui.alloc(&Ownership::PlaylistPage, (2, 46), (1, 14));
+fn centered_x(general: &GeneralState, owner: Ownership, text: &str) -> usize {
+    let width = general.ui.get_range(&owner).unwrap_or(0);
+    width.saturating_sub(text.width()) / 2
 }
-pub fn realloc(general: &mut GeneralState) {
-    general.ui.alloc(&Ownership::Songs, (2, 46), (1, 14));
+
+fn write_bool_indicator(
+    general: &mut GeneralState,
+    owner: Ownership,
+    enabled: bool,
+    yes: &str,
+    no: &str,
+) {
+    let (text, color) = if enabled {
+        (yes, ACTIVE_COLOR)
+    } else {
+        (no, INACTIVE_COLOR)
+    };
+
+    general.ui.write(&owner, 0, 0, text, color);
+}
+
+fn current_page_bounds(general: &GeneralState) -> (usize, usize, usize) {
+    let page_size = general.songs.typical_page_size.max(1);
+    let page = general.index.page.max(1);
+    let start = (page - 1) * page_size;
+    let end = (start + page_size).min(general.songs.filtered_songs.len());
+    (page_size, start, end)
 }
 
 pub fn draw_subtitle(general: &mut GeneralState, text: Option<&str>) {
     let content = text.unwrap_or("");
-    let width = general.ui.get_range(&Ownership::Subtitle).unwrap_or(46);
-    let text_width = content.width();
-    let x = (width / 2).saturating_sub(text_width / 2);
-    general.ui.write(&Ownership::Subtitle, x, 0, content, 9);
+    general.ui.write(
+        &Ownership::Subtitle,
+        centered_x(general, Ownership::Subtitle, content),
+        0,
+        content,
+        TITLE_COLOR,
+    );
 }
 
 pub fn autoalloc(general: &mut GeneralState) {
-    /* ---------------- BEGIN ALLOCATION ---------------- */
     general.ui.alloc(&Ownership::Songs, (2, 46), (1, 14));
     general.ui.alloc(&Ownership::SongInd, (1, 1), (1, 14));
     general.ui.alloc(&Ownership::Playlist, (2, 12), (16, 1));
@@ -73,9 +104,12 @@ pub fn autoalloc(general: &mut GeneralState) {
     general.ui.alloc(&Ownership::RpcVol, (41, 7), (17, 1));
     general.ui.alloc(&Ownership::RpcInd, (41, 3), (18, 1));
     general.ui.alloc(&Ownership::VolInd, (45, 3), (18, 1));
-    general
-        .ui
-        .c_alloc(&Ownership::Subtitle, (2, 46), (15, 1), Some("─".to_string()));
+    general.ui.c_alloc(
+        &Ownership::Subtitle,
+        (2, 46),
+        (15, 1),
+        Some("─".to_string()),
+    );
     general
         .ui
         .c_alloc(&Ownership::Search, (2, 32), (0, 1), Some("─".to_string()));
@@ -88,7 +122,6 @@ pub fn autoalloc(general: &mut GeneralState) {
         (17, 1),
         Some("─".to_string()),
     );
-    /* ---------------- END ALLOCATION ---------------- */
 }
 
 pub fn draw_frame(general: &mut GeneralState) {
@@ -120,7 +153,7 @@ pub fn draw_page(general: &mut GeneralState) {
 }
 
 pub fn draw_search(general: &mut GeneralState) {
-    let _x = format!("Search: {}", general.searchquery.query);
+    let text = format!("Search: {}", general.searchquery.query);
     general.ui.write(
         &Ownership::Search,
         0,
@@ -128,9 +161,9 @@ pub fn draw_search(general: &mut GeneralState) {
         if general.searchquery.mode == 0 {
             "Search or edit"
         } else {
-            &_x
+            &text
         },
-        9,
+        TITLE_COLOR,
     );
 }
 
@@ -155,66 +188,68 @@ impl PageData {
             select: 0,
         }
     }
-    fn get_name<'life>(&self, general: &'life mut GeneralState, idx: usize) -> String {
-        general.songs.all_songs[general.songs.get_ordered()
-            [(general.index.page.max(1) - 1) * general.songs.typical_page_size.max(1) + idx]]
-            .name
-            .clone()
+    fn page_song_index(general: &GeneralState, row: usize) -> Option<usize> {
+        let (page_size, start, end) = current_page_bounds(general);
+        if row >= page_size {
+            return None;
+        }
+
+        let absolute = start + row;
+        if absolute >= end {
+            return None;
+        }
+
+        Some(general.songs.get_ordered()[absolute])
     }
+
     pub fn draw_unchanged_moved_page(&mut self, general: &mut GeneralState) {
         if self.select == general.index.index {
             return;
         }
-        let name = &self.get_name(general, self.select);
+
         if !general.state.desel {
-            general.ui.write(&Ownership::Songs, 0, self.select, name, 0);
-            general.ui.write(
-                &Ownership::Songs,
-                0,
-                general.index.index,
-                &general.songs.all_songs[general.songs.get_ordered()[(general.index.page.max(1)
-                    - 1)
-                    * general.songs.typical_page_size.max(1)
-                    + general.index.index]]
-                    .name,
-                3,
-            );
+            if let Some(index) = Self::page_song_index(general, self.select) {
+                let name = general.songs.all_songs[index].name.clone();
+                general
+                    .ui
+                    .write(&Ownership::Songs, 0, self.select, &name, 0);
+            }
+            if let Some(index) = Self::page_song_index(general, general.index.index) {
+                let name = general.songs.all_songs[index].name.clone();
+                general.ui.write(
+                    &Ownership::Songs,
+                    0,
+                    general.index.index,
+                    &name,
+                    HIGHLIGHT_COLOR,
+                );
+            }
         }
+
         self.select = general.index.index;
     }
-    pub fn draw_changed_moved_page(&mut self, general: &mut GeneralState) {
-        let total = general.songs.filtered_songs.len();
-        let psize = general.songs.typical_page_size.max(1);
 
-        let page = general.index.page.max(1);
-        let start = (page - 1) * psize;
-        let end = (start + psize).min(total);
+    pub fn draw_changed_moved_page(&mut self, general: &mut GeneralState) {
+        let (page_size, start, end) = current_page_bounds(general);
 
         let mut row = 0;
-
-        let g = general.songs.get_ordered();
         for abs in start..end {
-            let original = g[abs];
+            let original = general.songs.get_ordered()[abs];
             let song = &general.songs.all_songs[original];
+            let color = if general.index.index == row && !general.state.desel {
+                self.select = row;
+                HIGHLIGHT_COLOR
+            } else {
+                0
+            };
 
-            general.ui.write(
-                &Ownership::Songs,
-                0,
-                row,
-                &song.name,
-                if general.index.index == row && !general.state.desel {
-                    self.select = row;
-                    3
-                } else {
-                    0
-                },
-            );
-
+            general
+                .ui
+                .write(&Ownership::Songs, 0, row, &song.name, color);
             row += 1;
         }
 
-        // clear remaining rows
-        while row < psize {
+        while row < page_size {
             general.ui.empty_instruction(&Ownership::Songs, row);
             row += 1;
         }
@@ -233,31 +268,37 @@ impl PageData {
         self.next = None;
         self.blacklist.clear();
 
-        let total = general.songs.filtered_songs.len();
-        let psize = general.songs.typical_page_size.max(1);
-
-        let start = (general.index.page.max(1) - 1) * psize;
+        let (page_size, start, end) = current_page_bounds(general);
 
         let current = general.songs.match_c();
         let next = general.songs.get_next();
 
         let mut row = 0;
-
-        let g = general.songs.get_ordered();
-        for abs in start..(start + psize).min(total) {
-            let original = g[abs];
+        for abs in start..end {
+            let original = general.songs.get_ordered()[abs];
 
             if abs == current {
                 self.current = Some(row);
-                general.ui.write(&Ownership::SongInd, 0, row, ">", 1);
+                general
+                    .ui
+                    .write(&Ownership::SongInd, 0, row, ">", ACTIVE_COLOR);
             } else if original == next && !general.state.isloop {
                 self.next = Some(row);
-                general.ui.write(&Ownership::SongInd, 0, row, "*", 4);
+                general
+                    .ui
+                    .write(&Ownership::SongInd, 0, row, "*", PENDING_COLOR);
             } else if general.songs.is_blacklist(original) {
                 self.blacklist.push(row);
-                general.ui.write(&Ownership::SongInd, 0, row, "x", 2);
+                general
+                    .ui
+                    .write(&Ownership::SongInd, 0, row, "x", INACTIVE_COLOR);
             }
 
+            row += 1;
+        }
+
+        while row < page_size {
+            general.ui.empty_instruction(&Ownership::SongInd, row);
             row += 1;
         }
     }
@@ -277,11 +318,10 @@ pub fn draw_sliding(general: &mut GeneralState) {
     let sliding = general.sliding.visible_text();
     general.ui.write(
         &Ownership::Sliding,
-        (general.ui.get_range(&Ownership::Sliding).unwrap() / 2)
-            .saturating_sub(sliding.width() / 2),
+        centered_x(general, Ownership::Sliding, &sliding),
         0,
         &sliding,
-        1,
+        ACTIVE_COLOR,
     );
 }
 
@@ -291,21 +331,21 @@ pub fn draw_const(general: &mut GeneralState) {
 }
 
 pub fn draw_shuffle_indc(general: &mut GeneralState) {
-    general.ui.write(
-        &Ownership::ShuInd,
-        0,
-        0,
-        if general.songs.shuffle { "yes" } else { "no" }.into(),
-        if general.songs.shuffle { 1 } else { 2 },
+    write_bool_indicator(
+        general,
+        Ownership::ShuInd,
+        general.songs.shuffle,
+        "yes",
+        "no",
     );
 }
 pub fn draw_loop_indc(general: &mut GeneralState) {
-    general.ui.write(
-        &Ownership::LoopInd,
-        0,
-        0,
-        if general.state.isloop { "yes" } else { "no" }.into(),
-        if general.state.isloop { 1 } else { 2 },
+    write_bool_indicator(
+        general,
+        Ownership::LoopInd,
+        general.state.isloop,
+        "yes",
+        "no",
     );
 }
 pub fn draw_time_cur(general: &mut GeneralState) {
@@ -313,7 +353,7 @@ pub fn draw_time_cur(general: &mut GeneralState) {
         &Ownership::Time1,
         0,
         0,
-        &to_mm_ss(general.timer.maxlen - general.timer.fcalc),
+        &to_mm_ss(general.timer.maxlen.saturating_sub(general.timer.fcalc)),
         0,
     );
 }
@@ -326,7 +366,7 @@ pub fn draw_artist(general: &mut GeneralState) {
     let artist = general.songs.current_artist();
     general.ui.write(
         &Ownership::Artist,
-        (general.ui.get_range(&Ownership::Artist).unwrap() / 2).saturating_sub(artist.width() / 2),
+        centered_x(general, Ownership::Artist, &artist),
         0,
         &artist,
         0,
@@ -387,7 +427,7 @@ pub fn draw_progress(general: &mut GeneralState) {
         0,
         0,
         "─",
-        1,
+        ACTIVE_COLOR,
         calc(general.timer.maxlen, general.timer.fcalc),
     );
 }
@@ -407,22 +447,38 @@ pub fn update(general: &mut GeneralState, window: &mut Window) {
 }
 
 pub fn init_curses(window: &mut Window) {
-    (
-        pancurses::curs_set(0),
-        window.keypad(true),
-        pancurses::noecho(),
-        window.nodelay(true),
-        mousemask(0x2 as u32, None),
+    pancurses::curs_set(0);
+    window.keypad(true);
+    pancurses::noecho();
+    window.nodelay(true);
+    mousemask(0x2 as u32, None);
+    window.resize(WINDOW_HEIGHT, WINDOW_WIDTH);
+    pancurses::start_color();
+    pancurses::init_pair(0, pancurses::COLOR_WHITE, pancurses::COLOR_BLACK);
+    pancurses::init_pair(
+        ACTIVE_COLOR as i16,
+        pancurses::COLOR_GREEN,
+        pancurses::COLOR_BLACK,
     );
-    window.resize(20, 50);
-    (
-        pancurses::start_color(),
-        pancurses::init_pair(0, pancurses::COLOR_WHITE, pancurses::COLOR_BLACK),
-        pancurses::init_pair(1, pancurses::COLOR_GREEN, pancurses::COLOR_BLACK),
-        pancurses::init_pair(2, pancurses::COLOR_RED, pancurses::COLOR_BLACK),
-        pancurses::init_pair(3, pancurses::COLOR_BLACK, pancurses::COLOR_WHITE),
-        pancurses::init_pair(4, pancurses::COLOR_YELLOW, pancurses::COLOR_BLACK),
-        pancurses::init_pair(9, pancurses::COLOR_CYAN, pancurses::COLOR_BLACK),
+    pancurses::init_pair(
+        INACTIVE_COLOR as i16,
+        pancurses::COLOR_RED,
+        pancurses::COLOR_BLACK,
+    );
+    pancurses::init_pair(
+        HIGHLIGHT_COLOR as i16,
+        pancurses::COLOR_BLACK,
+        pancurses::COLOR_WHITE,
+    );
+    pancurses::init_pair(
+        PENDING_COLOR as i16,
+        pancurses::COLOR_YELLOW,
+        pancurses::COLOR_BLACK,
+    );
+    pancurses::init_pair(
+        TITLE_COLOR as i16,
+        pancurses::COLOR_CYAN,
+        pancurses::COLOR_BLACK,
     );
 }
 

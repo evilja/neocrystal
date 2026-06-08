@@ -1,11 +1,13 @@
 use crate::modules::utils::{addto_album, album_data};
 use rand::seq::SliceRandom;
 
+use super::audio::audio_duration;
 use super::utils::{artist_data, change_artist};
 use std::path::Path;
 use std::thread::spawn;
 use std::time::Duration;
-use super::audio::audio_duration;
+
+const NOTHING: &str = "Nothing";
 
 #[derive(Clone)]
 pub struct Song {
@@ -37,14 +39,12 @@ pub fn absolute_index(index: usize, page: usize, typical_page_size: usize) -> us
 impl Songs {
     pub fn constructor(paths: Vec<String>) -> Self {
         let mut all_songs = Vec::with_capacity(paths.len());
-        let mut durations = vec![Duration::from_secs(0); paths.len()];
+        let mut durations = vec![Duration::default(); paths.len()];
         let mut handles = Vec::new();
 
         for (i, path) in paths.iter().enumerate() {
             let path_clone = path.clone();
-            let handle = spawn(move || {
-                audio_duration(&path_clone)
-            });
+            let handle = spawn(move || audio_duration(&path_clone));
             handles.push((i, handle));
         }
 
@@ -97,10 +97,53 @@ impl Songs {
         }
     }
 
+    fn reset_next_track(&mut self) {
+        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+    }
+
+    fn rebuild_searchable(song: &mut Song) {
+        song.searchable = format!(
+            "{}{}{}",
+            song.name.to_lowercase(),
+            song.artist.to_lowercase(),
+            song.playlist.to_lowercase()
+        );
+    }
+
+    fn current_song(&self) -> Option<&Song> {
+        if self.stophandler {
+            return None;
+        }
+
+        self.all_songs.get(self.current_index)
+    }
+
+    fn ordered_filtered(&self) -> Vec<usize> {
+        let mut ordered = self.filtered_songs.clone();
+        ordered.sort();
+        ordered
+    }
+
+    fn original_index_at_filtered(&self, index_in_filtered: usize) -> Option<usize> {
+        self.ordered_filtered().get(index_in_filtered).copied()
+    }
+
+    fn current_filtered_index(&self) -> Option<usize> {
+        self.ordered_filtered()
+            .iter()
+            .position(|&i| i == self.current_index)
+    }
+
+    fn reset_filter(&mut self) {
+        self.filtered_songs = (0..self.all_songs.len()).collect();
+    }
+
+    fn is_blacklisted(&self, original_index: usize) -> bool {
+        self.blacklist.contains(&original_index)
+    }
+
     pub fn get_ordered(&self) -> Vec<usize> {
-        let mut nvc = self.filtered_songs.clone();
-        nvc.sort();
-        nvc
+        self.ordered_filtered()
     }
 
     pub fn get_unordered(&self) -> &Vec<usize> {
@@ -118,39 +161,25 @@ impl Songs {
     pub fn shuffle(&mut self) {
         self.shuffle = !self.shuffle;
         self.urandom();
-        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+        self.reset_next_track();
     }
 
     pub fn current_artist(&self) -> String {
-        if self.stophandler {
-            return "Nothing".to_string();
-        }
-
-        self.all_songs
-            .get(self.current_index)
+        self.current_song()
             .map(|s| s.artist.clone())
-            .unwrap_or("Nothing".to_string())
+            .unwrap_or_else(|| NOTHING.to_string())
     }
 
     pub fn current_playlist(&self) -> String {
-        if self.stophandler {
-            return " ".to_string();
-        }
-
-        match self
-            .all_songs
-            .get(self.current_index)
-            .map(|s| s.playlist.clone())
-        {
-            Some(something) => {
-                if something == "" {
+        self.current_song()
+            .map(|song| {
+                if song.playlist.is_empty() {
                     " ".to_string()
                 } else {
-                    something
+                    song.playlist.clone()
                 }
-            }
-            None => " ".to_string(),
-        }
+            })
+            .unwrap_or_else(|| " ".to_string())
     }
 
     pub fn _status(&self) -> u8 {
@@ -166,14 +195,9 @@ impl Songs {
     }
 
     pub fn current_song_path(&self) -> String {
-        if self.stophandler {
-            return "Nothing".to_string();
-        }
-
-        self.all_songs
-            .get(self.current_index)
+        self.current_song()
             .map(|s| s.path.clone())
-            .unwrap_or("Nothing".to_string())
+            .unwrap_or_else(|| NOTHING.to_string())
     }
 
     pub fn set_next(&mut self, original_index: usize) {
@@ -187,51 +211,44 @@ impl Songs {
         self.setnext
     }
 
-    pub fn get_filtered_index(&self, original_index: usize) -> Result<usize, ()> {
-        self.get_ordered()
-            .iter()
-            .position(|&i| i == original_index)
-            .ok_or(())
-    }
-
     pub fn match_c(&self) -> usize {
-        self.get_ordered()
-            .iter()
-            .position(|&i| i == self.current_index)
-            .unwrap_or(usize::MAX)
+        self.current_filtered_index().unwrap_or(usize::MAX)
     }
 
     pub fn set_artist(&mut self, index_in_filtered: usize, artist: &String) {
-        if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
+        if self.stophandler {
             return;
         }
-        let idx = self.get_ordered()[index_in_filtered];
+
+        let Some(idx) = self.original_index_at_filtered(index_in_filtered) else {
+            return;
+        };
+
         if change_artist(&self.all_songs[idx].path, artist).is_ok() {
             self.all_songs[idx].artist = artist.clone();
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
-                + &self.all_songs[idx].artist.to_lowercase()
-                + &self.all_songs[idx].playlist.to_lowercase();
+            Self::rebuild_searchable(&mut self.all_songs[idx]);
         }
     }
+
     pub fn set_playlist(&mut self, index_in_filtered: usize, playlist: &String) {
-        if self.stophandler || index_in_filtered >= self.filtered_songs.len() {
+        if self.stophandler {
             return;
         }
-        let idx = self.get_ordered()[index_in_filtered];
+
+        let Some(idx) = self.original_index_at_filtered(index_in_filtered) else {
+            return;
+        };
+
         if addto_album(&self.all_songs[idx].path, playlist).is_ok() {
             self.all_songs[idx].playlist = playlist.clone();
-            self.all_songs[idx].searchable = self.all_songs[idx].name.clone().to_lowercase()
-                + &self.all_songs[idx].artist.to_lowercase()
-                + &playlist.to_string().to_lowercase();
+            Self::rebuild_searchable(&mut self.all_songs[idx]);
         }
     }
+
     pub fn search(&mut self, pattern: &String) {
         if pattern == "false" || pattern.is_empty() {
-            self.filtered_songs = (0..self.all_songs.len()).collect();
-            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
-            return;
+            self.reset_filter();
         } else {
-
             let pattern = pattern.to_lowercase();
             self.filtered_songs = self
                 .all_songs
@@ -240,19 +257,16 @@ impl Songs {
                 .filter(|(_, s)| s.searchable.contains(&pattern))
                 .map(|(i, _)| i)
                 .collect();
-
-            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
         }
-        self.urandom();
 
+        self.reset_next_track();
+        self.urandom();
     }
 
     pub fn blacklist(&mut self, index_in_filtered: usize) {
-        if index_in_filtered >= self.filtered_songs.len() {
+        let Some(original_index) = self.original_index_at_filtered(index_in_filtered) else {
             return;
-        }
-
-        let original_index = self.get_ordered()[index_in_filtered];
+        };
 
         if original_index == self.current_index {
             return;
@@ -261,7 +275,7 @@ impl Songs {
         if let Some(pos) = self.blacklist.iter().position(|&x| x == original_index) {
             self.blacklist.remove(pos);
             if !self.shuffle && self.setnext > original_index && self.setnext != usize::MAX {
-                self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+                self.reset_next_track();
             }
         } else {
             self.blacklist.push(original_index);
@@ -269,20 +283,19 @@ impl Songs {
                 if self.setnext != usize::MAX {
                     self.all_songs[self.setnext].forced = false;
                 }
-                self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+                self.reset_next_track();
             }
         }
     }
 
     pub fn is_blacklist(&self, original_index: usize) -> bool {
-        self.blacklist.contains(&original_index)
+        self.is_blacklisted(original_index)
     }
 
     pub fn current_name(&self) -> String {
-        self.all_songs
-            .get(self.current_index)
+        self.current_song()
             .map(|s| s.name.clone())
-            .unwrap_or("Nothing".to_string())
+            .unwrap_or_else(|| NOTHING.to_string())
     }
 
     fn renew_current_status(&mut self, original_index: usize) {
@@ -292,28 +305,23 @@ impl Songs {
 
     pub fn set_by_pindex(&mut self, index: usize, page: usize) -> Result<(), u8> {
         let absolute = absolute_index(index, page, self.typical_page_size);
-        if absolute >= self.filtered_songs.len() {
-            return Err(1);
-        }
 
-        let original_index = self.get_ordered()[absolute];
-        if self.blacklist.contains(&original_index) {
+        let Some(original_index) = self.original_index_at_filtered(absolute) else {
+            return Err(1);
+        };
+
+        if self.is_blacklisted(original_index) {
             return Err(0);
         }
+
         self.renew_current_status(original_index);
         self.stophandler = false;
-        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+        self.reset_next_track();
         Ok(())
     }
 
     pub fn get_duration(&self) -> Duration {
-        if self.stophandler {
-            return Duration::from_secs(0);
-        }
-        self.all_songs
-            .get(self.current_index)
-            .map(|s| s.duration)
-            .unwrap_or(Duration::from_secs(0))
+        self.current_song().map(|s| s.duration).unwrap_or_default()
     }
 
     fn algorithm_setnext(&mut self) -> Result<usize, ()> {
@@ -325,22 +333,22 @@ impl Songs {
         }
         if self.filtered_songs.len() == 1 {
             let original_index = self.get_unordered()[0];
-            if self.blacklist.contains(&original_index) {
+            if self.is_blacklisted(original_index) {
                 return Err(());
             } else {
                 return Ok(original_index);
             }
         }
         // sequential
-        if let Ok(start) = self.get_filtered_index(self.current_index) {
+        if let Some(start) = self.current_filtered_index() {
             for &i in &self.get_unordered()[start + 1..] {
-                if !self.blacklist.contains(&i) {
+                if !self.is_blacklisted(i) {
                     return Ok(i);
                 }
             }
             self.urandom();
             for &i in self.get_unordered().iter().take(start) {
-                if !self.blacklist.contains(&i) {
+                if !self.is_blacklisted(i) {
                     return Ok(i);
                 }
             }
@@ -348,7 +356,7 @@ impl Songs {
             self.urandom();
             // this shit should NEVER run but is there just in case
             for &i in &self.filtered_songs {
-                if !self.blacklist.contains(&i) && i != self.current_index {
+                if !self.is_blacklisted(i) && i != self.current_index {
                     return Ok(i);
                 }
             }
@@ -362,31 +370,29 @@ impl Songs {
             Err(())
         } else {
             self.renew_current_status(self.setnext);
-            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+            self.reset_next_track();
             Ok(self.current_index)
         }
     }
+
     pub fn prev(&mut self) -> Result<usize, ()> {
         if self.stophandler {
             return Err(());
         }
-        let start = match self.get_filtered_index(self.current_index) {
-            Ok(s) => s,
-            Err(()) => return Err(()),
+
+        let Some(start) = self.current_filtered_index() else {
+            return Err(());
         };
+
         let unordered = self.get_unordered();
         let candidate = (0..start)
             .rev()
             .map(|i| unordered[i])
-            .chain(
-                (start + 1..unordered.len())
-                    .rev()
-                    .map(|i| unordered[i]),
-            )
-            .find(|&i| !self.blacklist.contains(&i));
+            .chain((start + 1..unordered.len()).rev().map(|i| unordered[i]))
+            .find(|&i| !self.is_blacklisted(i));
         if let Some(i) = candidate {
             self.renew_current_status(i);
-            self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+            self.reset_next_track();
             Ok(self.current_index)
         } else {
             Err(())
@@ -395,7 +401,7 @@ impl Songs {
 
     pub fn resume(&mut self) {
         self.stophandler = false;
-        self.setnext = self.algorithm_setnext().unwrap_or(usize::MAX);
+        self.reset_next_track();
     }
     pub fn stop(&mut self) {
         self.stophandler = true;
