@@ -47,4 +47,26 @@ R: Resume
 
 
 
+## Song preferences and shuffle
+
+NeoCrystal keeps a per-song score in a versioned JSON database. New songs start at
+100, scores stay between 0 and 255, and the database is stored at
+`${XDG_DATA_HOME:-$HOME/.local/share}/neocrystal/song-scores.json` on Linux/Unix
+(or the platform data directory on macOS and Windows).
+
+Directly playing a song adds one point. Next, Previous, or replacing a different
+active song subtracts one point from the skipped song; natural completion adds a
+point only below 100. Pause, Stop, seek, forced-next scheduling, and Quit are
+neutral. A clean session raises each unplayed song's consecutive miss count. The
+first five misses do not affect its score; later consecutive misses remove 1,
+then 2, then 3, ... points from scores above 100, never below 100. Playing a song
+resets its miss count.
+
+Shuffle divides songs into high (`>100`), normal (`=100`), and low (`<100`)
+tiers. Low songs are spaced apart and high songs are adaptively spaced, with a
+modest preference for high songs in positions 1--100 of the first shuffle loop
+only. Automatic loops contain every eligible song exactly once without repeats.
+Direct controls,
+forced-next, Previous, and repeat remain explicit overrides of that order.
+
 # neocrystal-headless

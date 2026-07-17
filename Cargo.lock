@@ -942,6 +942,8 @@ dependencies = [
  "rand 0.9.2",
  "ringbuf",
  "rodio",
+ "serde",
+ "serde_json",
  "symphonia",
  "tokio",
  "tokio-util",

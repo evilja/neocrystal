@@ -71,6 +71,7 @@
 ///       bytes: [E2, 94, 82]
 ///
 extern crate unicode_width;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 type Range = (usize, usize);
@@ -347,6 +348,63 @@ impl<Id: PartialEq + Copy> UI<Id> {
             return;
         }
         self.table.si_blob(b, x, y, color);
+    }
+
+    pub fn write_shimmer(
+        &mut self,
+        id: &Id,
+        mut x: usize,
+        mut y: usize,
+        text: &str,
+        base_color: ColorIntegerSize,
+        mid_color: ColorIntegerSize,
+        highlight_color: ColorIntegerSize,
+        phase: usize,
+    ) {
+        let w = UnicodeWidthStr::width(text);
+
+        let region = match self.prepare_region(id) {
+            Some(region) => region,
+            None => return,
+        };
+        x += region.range_x.0;
+        y += region.range_y.0;
+
+        if self.idx(region.range_x.0, y).is_none() {
+            return;
+        }
+
+        if !blob_fit(x, w, region.range_x) {
+            return;
+        }
+
+        self.fill_cleanup_row(&region, y, w, x != region.range_x.0);
+
+        if text.is_empty() {
+            return;
+        }
+
+        let highlight = phase % (w + 6);
+        let mut cell = 0;
+        for grapheme in text.graphemes(true) {
+            let grapheme_width = UnicodeWidthStr::width(grapheme).max(1);
+            let end = cell + grapheme_width - 1;
+            let distance = if highlight < cell {
+                cell - highlight
+            } else if highlight > end {
+                highlight - end
+            } else {
+                0
+            };
+            let color = match distance {
+                0 => highlight_color,
+                1 => mid_color,
+                _ => base_color,
+            };
+
+            self.table.si_blob(grapheme.as_bytes(), x + cell, y, color);
+            cell += UnicodeWidthStr::width(grapheme);
+        }
     }
 
     pub fn write_simy(

@@ -8,14 +8,14 @@ use crate::modules::dbus::spawn_mpris;
 #[cfg(not(target_os = "windows"))]
 use crate::modules::mouse::{self};
 use crate::modules::presence;
-use pancurses::{initscr, Input};
+use pancurses::{Input, initscr};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self};
 use std::time::Instant;
 
 use super::{
     curses::*,
-    presence::{rpc_handler, RpcCommand},
+    presence::{RpcCommand, rpc_handler},
     songs::absolute_index,
 };
 
@@ -182,7 +182,7 @@ fn handle_duration_report(general: &mut GeneralState, rpc_comm: &presence::RpcCo
 
     draw_progress(general);
     draw_time_cur(general);
-    if general.sliding.is_changing() {
+    if general.sliding.is_changing() || !general.songs.stophandler {
         draw_sliding(general);
     }
 
@@ -307,12 +307,12 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
             turn_action_into_key(&mut key, &mut general);
             match key {
                 Input::KeyNext => {
-                    // song ended but ignore loop. this is used from D-Bus or keyboard but mainly dbus
                     if general.songs.stophandler {
                         continue;
                     }
-                    let _ = general.songs.set_by_next();
-                    if !play_loaded_song(&mut general, &tx, &mut page) {
+                    if general.songs.skipped_and_next().is_ok()
+                        && !play_loaded_song(&mut general, &tx, &mut page)
+                    {
                         break;
                     }
                 }
@@ -320,20 +320,22 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
                     if general.songs.stophandler {
                         continue;
                     }
-                    let _ = general.songs.prev();
-                    if !play_loaded_song(&mut general, &tx, &mut page) {
+                    if general.songs.skipped_and_previous().is_ok()
+                        && !play_loaded_song(&mut general, &tx, &mut page)
+                    {
                         break;
                     }
                 }
                 Input::KeyF13 => {
-                    // song ended
                     if general.songs.stophandler {
                         continue;
-                    } else if !general.state.isloop {
-                        let _ = general.songs.set_by_next();
                     }
-
-                    if !play_loaded_song(&mut general, &tx, &mut page) {
+                    let transitioned = if general.state.isloop {
+                        general.songs.completed_with_repeat().is_ok()
+                    } else {
+                        general.songs.completed_and_next().is_ok()
+                    };
+                    if transitioned && !play_loaded_song(&mut general, &tx, &mut page) {
                         break;
                     }
                 }
@@ -457,6 +459,7 @@ pub fn crystal_manager(tx: Sender<AudioCommand>, comm_rx: Receiver<AudioReportAc
     match rpc_comm.send_message(RpcCommand::Stop) {
         _ => (),
     }
+    general.songs.finish_session();
     exit_curses(&mut window);
     true
 }
@@ -465,24 +468,13 @@ pub fn play_current_song(general: &mut GeneralState, tx: &Sender<AudioCommand>) 
     if general
         .songs
         .set_by_pindex(general.index.index, general.index.page)
-        != Err(0)
+        .is_err()
     {
-        if tx
-            .send(AudioCommand::Play(general.songs.current_song_path()))
-            .is_err()
-        {
-            return false;
-        }
-
-        general.timer.maxlen = general.songs.get_duration();
-
-        general.timer.fcalc = general.timer.maxlen;
-
-        general.sliding.reset_to(general.songs.current_name());
-        return true;
-    } else {
         return false;
     }
+
+    tx.send(AudioCommand::Play(general.songs.current_song_path()))
+        .is_ok()
 }
 
 pub fn change_page(dir: Direction, general: &mut GeneralState, page: &mut PageData) {

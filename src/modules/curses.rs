@@ -1,4 +1,4 @@
-use pancurses::{mousemask, Window};
+use pancurses::{Window, mousemask};
 
 use crate::modules::{general::NcursesExec, utils::ReinitMode};
 use std::time::Duration;
@@ -13,6 +13,9 @@ const ACTIVE_COLOR: u32 = 1;
 const INACTIVE_COLOR: u32 = 2;
 const HIGHLIGHT_COLOR: u32 = 3;
 const PENDING_COLOR: u32 = 4;
+const SLIDING_BASE: u32 = 10;
+const SLIDING_MID: u32 = 11;
+const SLIDING_HIGH: u32 = 12;
 
 #[inline]
 pub fn calc(maxlen: Duration, curr: Duration) -> usize {
@@ -316,12 +319,22 @@ pub fn draw_playlist(general: &mut GeneralState) {
 }
 pub fn draw_sliding(general: &mut GeneralState) {
     let sliding = general.sliding.visible_text();
-    general.ui.write(
+    let shimmer_phase = (general
+        .timer
+        .maxlen
+        .saturating_sub(general.timer.fcalc)
+        .as_millis()
+        / 120) as usize;
+
+    general.ui.write_shimmer(
         &Ownership::Sliding,
         centered_x(general, Ownership::Sliding, &sliding),
         0,
         &sliding,
-        ACTIVE_COLOR,
+        SLIDING_BASE,
+        SLIDING_MID,
+        SLIDING_HIGH,
+        shimmer_phase,
     );
 }
 
@@ -480,6 +493,9 @@ pub fn init_curses(window: &mut Window) {
         pancurses::COLOR_CYAN,
         pancurses::COLOR_BLACK,
     );
+    pancurses::init_pair(SLIDING_BASE as i16, 22, pancurses::COLOR_BLACK);
+    pancurses::init_pair(SLIDING_MID as i16, 28, pancurses::COLOR_BLACK);
+    pancurses::init_pair(SLIDING_HIGH as i16, 40, pancurses::COLOR_BLACK);
 }
 
 pub fn exit_curses(window: &mut Window) {
